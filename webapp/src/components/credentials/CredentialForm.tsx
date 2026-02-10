@@ -6,6 +6,20 @@ import { TeamSelector } from '@/components/teams/TeamSelector';
 import type { TeamPublic } from '@/lib/types';
 import { useState } from 'react';
 
+const PASSWORD_CHARS =
+  'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
+const PASSWORD_LENGTH = 16;
+
+function generateRandomPassword(): string {
+  let password = '';
+  for (let i = 0; i < PASSWORD_LENGTH; i++) {
+    password += PASSWORD_CHARS.charAt(
+      Math.floor(Math.random() * PASSWORD_CHARS.length)
+    );
+  }
+  return password;
+}
+
 interface CredentialFormProps {
   values: {
     record_name: string;
@@ -44,12 +58,7 @@ export function CredentialForm({
   };
 
   const generatePassword = () => {
-    const chars =
-      'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
-    let password = '';
-    for (let i = 0; i < 16; i++) {
-      password += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
+    const password = generateRandomPassword();
     const syntheticEvent = {
       target: { value: password },
     } as React.ChangeEvent<HTMLInputElement>;

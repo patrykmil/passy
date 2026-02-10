@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Trash2,
@@ -15,6 +15,40 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import type { CredentialPublic } from '@/lib/types';
 import { useUserStore } from '@/lib/stores/userStore';
 import { decryptPassword, decryptTeamPassword } from '@/lib/crypto';
+
+function highlightMatch(text: string, query: string): ReactNode {
+  if (!query.trim() || !text) return text;
+
+  const queryLower = query.toLowerCase();
+  const textLower = text.toLowerCase();
+  const index = textLower.indexOf(queryLower);
+
+  if (index === -1) return text;
+
+  return (
+    <>
+      {text.substring(0, index)}
+      <mark className="bg-yellow-200 dark:bg-yellow-900">
+        {text.substring(index, index + query.length)}
+      </mark>
+      {text.substring(index + query.length)}
+    </>
+  );
+}
+
+async function decryptCredentialPassword(
+  credential: CredentialPublic,
+  symetricKey: string | null,
+  privateKey: string | null
+): Promise<string> {
+  if (!credential.team_id) {
+    if (!symetricKey) return '';
+    return decryptPassword(credential.password, symetricKey);
+  } else {
+    if (!privateKey) return '';
+    return decryptTeamPassword(credential.password, privateKey);
+  }
+}
 
 interface CredentialCardProps {
   credential: CredentialPublic;
@@ -40,33 +74,15 @@ export function CredentialCard({
       return;
     }
 
-    const decryptAsync = async () => {
-      try {
-        if (!credential.team_id) {
-          if (!symetricKey) {
-            setDecryptedPassword('');
-            return;
-          }
-          const decrypted = await decryptPassword(credential.password, symetricKey);
-          setDecryptedPassword(decrypted);
-        } else {
-          if (!privateKey) {
-            setDecryptedPassword('');
-            return;
-          }
-          const decrypted = decryptTeamPassword(credential.password, privateKey);
-          setDecryptedPassword(decrypted);
-        }
-      } catch (error) {
+    decryptCredentialPassword(credential, symetricKey, privateKey)
+      .then(setDecryptedPassword)
+      .catch((error) => {
         console.warn(
           `Failed to decrypt credential ${credential.id}:`,
           error instanceof Error ? error.message : String(error)
         );
         setDecryptedPassword('');
-      }
-    };
-
-    decryptAsync();
+      });
   }, [credential.password, credential.id, credential.team_id, symetricKey, privateKey]);
 
   const togglePasswordVisibility = () => {
@@ -105,26 +121,6 @@ export function CredentialCard({
     } else {
       navigate(`/credentials/update/${id}`);
     }
-  };
-
-  const highlightMatch = (text: string, query: string) => {
-    if (!query.trim() || !text) return text;
-
-    const queryLower = query.toLowerCase();
-    const textLower = text.toLowerCase();
-    const index = textLower.indexOf(queryLower);
-
-    if (index === -1) return text;
-
-    return (
-      <>
-        {text.substring(0, index)}
-        <mark className="bg-yellow-200 dark:bg-yellow-900">
-          {text.substring(index, index + query.length)}
-        </mark>
-        {text.substring(index + query.length)}
-      </>
-    );
   };
 
   return (

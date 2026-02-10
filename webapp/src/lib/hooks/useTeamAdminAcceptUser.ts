@@ -2,6 +2,41 @@ import { useState } from 'react';
 import { credentialsApi, userApi } from '@/lib/api';
 import { useUserStore } from '@/lib/stores/userStore';
 import { decryptTeamPassword, encryptTeamPassword } from '@/lib/crypto';
+import type { CredentialPublic } from '@/lib/types';
+
+async function shareCredentialWithUser(
+  credential: CredentialPublic,
+  privateKey: string,
+  newUserPublicKey: string,
+  teamId: number,
+  newUserId: number
+): Promise<void> {
+  const decryptedPassword = decryptTeamPassword(credential.password, privateKey);
+  const reencryptedPassword = encryptTeamPassword(decryptedPassword, newUserPublicKey);
+
+  await credentialsApi.createCredential({
+    record_name: credential.record_name,
+    url: credential.url,
+    login: credential.login,
+    password: reencryptedPassword,
+    team_id: teamId,
+    user_id: newUserId,
+    group: credential.group,
+  });
+}
+
+async function fetchNewUserPublicKey(newUserId: number): Promise<string> {
+  const newUser = await userApi.getUserById(newUserId);
+  if (!newUser.public_key) {
+    throw new Error(`No public key found for user ${newUser.username}`);
+  }
+  return newUser.public_key;
+}
+
+async function getTeamCredentials(teamId: number): Promise<CredentialPublic[]> {
+  const allCredentials = await credentialsApi.getMyCredentials();
+  return allCredentials.filter((cred) => cred.team_id === teamId);
+}
 
 export function useTeamAdminAcceptUser() {
   const [isProcessing, setIsProcessing] = useState(false);
@@ -17,13 +52,8 @@ export function useTeamAdminAcceptUser() {
         throw new Error('Encryption keys not available. Please log in again.');
       }
 
-      const newUser = await userApi.getUserById(newUserId);
-      if (!newUser.public_key) {
-        throw new Error(`No public key found for user ${newUser.username}`);
-      }
-
-      const allCredentials = await credentialsApi.getMyCredentials();
-      const teamCredentials = allCredentials.filter((cred) => cred.team_id === teamId);
+      const newUserPublicKey = await fetchNewUserPublicKey(newUserId);
+      const teamCredentials = await getTeamCredentials(teamId);
 
       if (teamCredentials.length === 0) {
         setIsProcessing(false);
@@ -32,25 +62,13 @@ export function useTeamAdminAcceptUser() {
 
       for (const credential of teamCredentials) {
         try {
-          const decryptedPassword = decryptTeamPassword(
-            credential.password,
-            privateKey
+          await shareCredentialWithUser(
+            credential,
+            privateKey,
+            newUserPublicKey,
+            teamId,
+            newUserId
           );
-
-          const reencryptedPassword = encryptTeamPassword(
-            decryptedPassword,
-            newUser.public_key
-          );
-
-          await credentialsApi.createCredential({
-            record_name: credential.record_name,
-            url: credential.url,
-            login: credential.login,
-            password: reencryptedPassword,
-            team_id: teamId,
-            user_id: newUserId,
-            group: credential.group,
-          });
         } catch (credError: any) {
           console.error(`Failed to re-encrypt credential ${credential.id}:`, credError);
           throw new Error(

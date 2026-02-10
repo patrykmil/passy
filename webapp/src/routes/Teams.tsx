@@ -14,6 +14,74 @@ import {
   useMyApplications,
 } from '@/lib/hooks/useTeamApplications';
 import { useUserStore } from '@/lib/stores/userStore';
+import type { TeamDetailed } from '@/lib/types';
+
+interface TeamSelectorButtonsProps {
+  teams: TeamDetailed[];
+  selectedTeamId: number | undefined;
+  onSelect: (teamId: number | undefined) => void;
+}
+
+function TeamSelectorButtons({
+  teams,
+  selectedTeamId,
+  onSelect,
+}: TeamSelectorButtonsProps) {
+  const teamsWithAwaiting = teams.filter(
+    (team) => team.awaiting && team.awaiting.length > 0
+  );
+
+  return (
+    <div>
+      <label className="block text-sm font-medium mb-2">Select Team to Manage:</label>
+      <div className="flex flex-wrap gap-2">
+        {teamsWithAwaiting.map((team) => (
+          <Button
+            key={team.id}
+            variant={selectedTeamId === team.id ? 'default' : 'outline'}
+            onClick={() => {
+              team.id !== selectedTeamId ? onSelect(team.id) : onSelect(undefined);
+            }}
+            size="sm"
+          >
+            {team.name} ({team.awaiting?.length})
+          </Button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+interface ApplicationsPanelProps {
+  selectedTeamId: number | undefined;
+  applications: any[];
+  isLoading: boolean;
+  isResponding: boolean;
+  error: string | null;
+  onRespond: (applicationId: number, accept: boolean) => void;
+}
+
+function ApplicationsPanel({
+  selectedTeamId,
+  applications,
+  isLoading,
+  isResponding,
+  error,
+  onRespond,
+}: ApplicationsPanelProps) {
+  if (!selectedTeamId) return null;
+
+  if (isLoading) return <LoadingState message="Loading applications..." />;
+  if (error) return <ErrorState message={error} />;
+
+  return (
+    <TeamApplications
+      applications={applications}
+      onRespond={onRespond}
+      isLoading={isResponding}
+    />
+  );
+}
 
 export default function Teams() {
   const { teams, isLoading, error, scrollToTeam, refetch } = useTeamsLogic();
@@ -60,7 +128,6 @@ export default function Teams() {
     <PageLayout sidebar={sidebar}>
       <div className="p-8">
         <div className="max-w-4xl mx-auto space-y-8">
-          {/* Header with Apply Button */}
           <div className="flex justify-between items-center">
             <h1 className="text-3xl font-bold ">My Teams</h1>
             <div className="flex gap-4">
@@ -73,7 +140,6 @@ export default function Teams() {
             </div>
           </div>
 
-          {/* My Pending Applications */}
           {myApplications.length > 0 && (
             <div>
               {myAppsLoading ? (
@@ -84,55 +150,28 @@ export default function Teams() {
             </div>
           )}
 
-          {/* Team Applications Management (Admin Only) */}
           {isAdmin && hasAwaitingTeams && (
             <div className="border-t pt-8">
               <h2 className="text-2xl font-bold  mb-6">Manage Team Applications</h2>
               <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Select Team to Manage:
-                  </label>
-                  <div className="flex flex-wrap gap-2">
-                    {adminTeams
-                      .filter((team) => team.awaiting && team.awaiting.length > 0)
-                      .map((team) => (
-                        <Button
-                          key={team.id}
-                          variant={selectedTeamId === team.id ? 'default' : 'outline'}
-                          onClick={() => {
-                            team.id !== selectedTeamId
-                              ? setSelectedTeamId(team.id)
-                              : setSelectedTeamId(undefined);
-                          }}
-                          size="sm"
-                        >
-                          {team.name} ({team.awaiting?.length})
-                        </Button>
-                      ))}
-                  </div>
-                </div>
+                <TeamSelectorButtons
+                  teams={adminTeams}
+                  selectedTeamId={selectedTeamId}
+                  onSelect={setSelectedTeamId}
+                />
 
-                {selectedTeamId && (
-                  <div>
-                    {appsLoading ? (
-                      <LoadingState message="Loading applications..." />
-                    ) : appsError ? (
-                      <ErrorState message={appsError} />
-                    ) : (
-                      <TeamApplications
-                        applications={applications}
-                        onRespond={respondToApplication}
-                        isLoading={isResponding}
-                      />
-                    )}
-                  </div>
-                )}
+                <ApplicationsPanel
+                  selectedTeamId={selectedTeamId}
+                  applications={applications}
+                  isLoading={appsLoading}
+                  isResponding={isResponding}
+                  error={appsError}
+                  onRespond={respondToApplication}
+                />
               </div>
             </div>
           )}
 
-          {/* Teams List */}
           {teams.length === 0 ? (
             <EmptyState searchQuery="" onClearSearch={() => {}} />
           ) : (

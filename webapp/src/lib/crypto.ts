@@ -32,13 +32,10 @@ async function stringKeyToCryptoKey(keyString: string): Promise<CryptoKey> {
   ]);
 }
 
-export async function encryptPrivateKey(
-  privateKey: string,
-  userPasswordKey: string
-): Promise<string> {
+async function aesGcmEncrypt(plaintext: string, key: string): Promise<string> {
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  const cryptoKey = await stringKeyToCryptoKey(userPasswordKey);
-  const messageBuffer = new TextEncoder().encode(privateKey);
+  const cryptoKey = await stringKeyToCryptoKey(key);
+  const messageBuffer = new TextEncoder().encode(plaintext);
 
   const encryptedBuffer = await crypto.subtle.encrypt(
     { name: 'AES-GCM', iv },
@@ -53,28 +50,37 @@ export async function encryptPrivateKey(
   return encodeBase64(combined);
 }
 
+async function aesGcmDecrypt(ciphertext: string, key: string): Promise<string> {
+  const combined = decodeBase64(ciphertext);
+  const iv = combined.slice(0, 12);
+  const encrypted = combined.slice(12);
+
+  const cryptoKey = await stringKeyToCryptoKey(key);
+  const decryptedBuffer = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv },
+    cryptoKey,
+    encrypted
+  );
+
+  return new TextDecoder().decode(decryptedBuffer);
+}
+
+export async function encryptPrivateKey(
+  privateKey: string,
+  userPasswordKey: string
+): Promise<string> {
+  return aesGcmEncrypt(privateKey, userPasswordKey);
+}
+
 export async function decryptPrivateKey(
   encryptedPrivateKey: string,
   userPasswordKey: string
 ): Promise<string> {
   try {
-    const combined = decodeBase64(encryptedPrivateKey);
-    const iv = combined.slice(0, 12);
-    const ciphertext = combined.slice(12);
-
-    const cryptoKey = await stringKeyToCryptoKey(userPasswordKey);
-    const decryptedBuffer = await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv },
-      cryptoKey,
-      ciphertext
-    );
-
-    const privateKey = new TextDecoder().decode(decryptedBuffer);
-
+    const privateKey = await aesGcmDecrypt(encryptedPrivateKey, userPasswordKey);
     if (!privateKey) {
       throw new Error('Failed to decrypt private key');
     }
-
     return privateKey;
   } catch (error) {
     console.error('Failed to decrypt private key:', error);
@@ -86,21 +92,7 @@ export async function encryptPassword(
   plainPassword: string,
   symetricKey: string
 ): Promise<string> {
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const cryptoKey = await stringKeyToCryptoKey(symetricKey);
-  const messageBuffer = new TextEncoder().encode(plainPassword);
-
-  const encryptedBuffer = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv },
-    cryptoKey,
-    messageBuffer
-  );
-
-  const combined = new Uint8Array(iv.length + encryptedBuffer.byteLength);
-  combined.set(iv);
-  combined.set(new Uint8Array(encryptedBuffer), iv.length);
-
-  return encodeBase64(combined);
+  return aesGcmEncrypt(plainPassword, symetricKey);
 }
 
 export async function decryptPassword(
@@ -108,22 +100,36 @@ export async function decryptPassword(
   symetricKey: string
 ): Promise<string> {
   try {
-    const combined = decodeBase64(encryptedPassword);
-    const iv = combined.slice(0, 12);
-    const ciphertext = combined.slice(12);
-
-    const cryptoKey = await stringKeyToCryptoKey(symetricKey);
-    const decryptedBuffer = await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv },
-      cryptoKey,
-      ciphertext
-    );
-
-    return new TextDecoder().decode(decryptedBuffer);
+    return await aesGcmDecrypt(encryptedPassword, symetricKey);
   } catch (error) {
     console.error('Failed to decrypt password:', error);
     return '';
   }
+}
+
+function packNaclMessage(
+  ephemeralPublicKey: Uint8Array,
+  nonce: Uint8Array,
+  encrypted: Uint8Array
+): Uint8Array {
+  const combined = new Uint8Array(
+    ephemeralPublicKey.length + nonce.length + encrypted.length
+  );
+  combined.set(ephemeralPublicKey);
+  combined.set(nonce, ephemeralPublicKey.length);
+  combined.set(encrypted, ephemeralPublicKey.length + nonce.length);
+  return combined;
+}
+
+function unpackNaclMessage(combined: Uint8Array) {
+  const publicKeyLength = 32;
+  const nonceLength = nacl.box.nonceLength;
+
+  return {
+    ephemeralPublicKey: combined.slice(0, publicKeyLength),
+    nonce: combined.slice(publicKeyLength, publicKeyLength + nonceLength),
+    ciphertext: combined.slice(publicKeyLength + nonceLength),
+  };
 }
 
 export function encryptTeamPassword(plainPassword: string, publicKey: string): string {
@@ -146,13 +152,7 @@ export function encryptTeamPassword(plainPassword: string, publicKey: string): s
     throw new Error('Asymetric encryption failed');
   }
 
-  const combined = new Uint8Array(
-    ephemeralKeyPair.publicKey.length + nonce.length + encrypted.length
-  );
-  combined.set(ephemeralKeyPair.publicKey);
-  combined.set(nonce, ephemeralKeyPair.publicKey.length);
-  combined.set(encrypted, ephemeralKeyPair.publicKey.length + nonce.length);
-
+  const combined = packNaclMessage(ephemeralKeyPair.publicKey, nonce, encrypted);
   return encodeBase64(combined);
 }
 
@@ -161,16 +161,9 @@ export function decryptTeamPassword(
   userPrivateKey: string
 ): string {
   const combined = decodeBase64(encryptedPassword);
-
-  const publicKeyLength = 32;
-  const nonceLength = nacl.box.nonceLength;
-
-  const ephemeralPublicKey = combined.slice(0, publicKeyLength);
-  const nonce = combined.slice(publicKeyLength, publicKeyLength + nonceLength);
-  const ciphertext = combined.slice(publicKeyLength + nonceLength);
+  const { ephemeralPublicKey, nonce, ciphertext } = unpackNaclMessage(combined);
 
   const userSecretKey = decodeBase64(userPrivateKey);
-
   const decrypted = nacl.box.open(ciphertext, nonce, ephemeralPublicKey, userSecretKey);
 
   if (!decrypted) {

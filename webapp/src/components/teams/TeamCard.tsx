@@ -7,6 +7,77 @@ import { useUserStore } from '@/lib/stores/userStore';
 import { teamsApi } from '@/lib/api';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
+function UserAvatar({
+  username,
+  variant,
+}: {
+  username: string;
+  variant: 'admin' | 'member';
+}) {
+  const bgClass =
+    variant === 'admin'
+      ? 'bg-primary text-primary-foreground'
+      : 'bg-muted-foreground/20 text-muted-foreground';
+
+  return (
+    <div
+      className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${bgClass}`}
+    >
+      {username.charAt(0).toUpperCase()}
+    </div>
+  );
+}
+
+function AdminRow({ username }: { username: string }) {
+  return (
+    <div className="flex items-center gap-3 p-2 bg-primary/10 rounded-lg">
+      <UserAvatar username={username} variant="admin" />
+      <div>
+        <div className="font-medium text-foreground">{username}</div>
+        <div className="text-sm text-primary">Administrator</div>
+      </div>
+    </div>
+  );
+}
+
+function MemberRow({
+  username,
+  memberId,
+  isAdmin,
+  onKick,
+  isKicking,
+}: {
+  username: string;
+  memberId: number;
+  isAdmin: boolean;
+  onKick: (memberId: number) => void;
+  isKicking: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 p-2 bg-muted rounded-lg">
+      <div className="flex items-center gap-3 flex-1">
+        <UserAvatar username={username} variant="member" />
+        <div>
+          <div className="font-medium text-foreground">{username}</div>
+          <div className="text-sm text-muted-foreground">Member</div>
+        </div>
+      </div>
+      {isAdmin && (
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => onKick(memberId)}
+          disabled={isKicking}
+          className="text-destructive hover:text-destructive"
+          title="Remove member"
+        >
+          <X className="h-4 w-4" />
+        </Button>
+      )}
+    </div>
+  );
+}
+
 interface TeamCardProps {
   team: TeamDetailed;
   onTeamUpdate?: () => void;
@@ -95,20 +166,7 @@ export function TeamCard({ team, onTeamUpdate }: TeamCardProps) {
             {team.admins.length > 0 ? (
               <div className="space-y-2">
                 {team.admins.map((admin) => (
-                  <div
-                    key={admin.id}
-                    className="flex items-center gap-3 p-2 bg-primary/10 rounded-lg"
-                  >
-                    <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center text-primary-foreground text-sm font-medium">
-                      {admin.username.charAt(0).toUpperCase()}
-                    </div>
-                    <div>
-                      <div className="font-medium text-foreground">
-                        {admin.username}
-                      </div>
-                      <div className="text-sm text-primary">Administrator</div>
-                    </div>
-                  </div>
+                  <AdminRow key={admin.id} username={admin.username} />
                 ))}
               </div>
             ) : (
@@ -126,34 +184,14 @@ export function TeamCard({ team, onTeamUpdate }: TeamCardProps) {
             {team.members.length > 0 ? (
               <div className="space-y-2">
                 {team.members.map((member) => (
-                  <div
+                  <MemberRow
                     key={member.id}
-                    className="flex items-center justify-between gap-3 p-2 bg-muted rounded-lg"
-                  >
-                    <div className="flex items-center gap-3 flex-1">
-                      <div className="w-8 h-8 bg-muted-foreground/20 rounded-full flex items-center justify-center text-muted-foreground text-sm font-medium">
-                        {member.username.charAt(0).toUpperCase()}
-                      </div>
-                      <div>
-                        <div className="font-medium text-foreground">
-                          {member.username}
-                        </div>
-                        <div className="text-sm text-muted-foreground">Member</div>
-                      </div>
-                    </div>
-                    {isUserAdmin && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleTeamKick(member.id!)}
-                        disabled={kickUserMutation.isPending}
-                        className="text-destructive hover:text-destructive"
-                        title="Remove member"
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </div>
+                    username={member.username}
+                    memberId={member.id!}
+                    isAdmin={!!isUserAdmin}
+                    onKick={handleTeamKick}
+                    isKicking={kickUserMutation.isPending}
+                  />
                 ))}
               </div>
             ) : (

@@ -4,6 +4,70 @@ import { credentialsApi, teamsApi } from '@/lib/api';
 import { useScrollToElement } from '@/lib/hooks/useScrollToElement';
 import type { CredentialPublic } from '@/lib/types';
 
+function fuzzySearch(query: string, text: string): number {
+  if (!query) return 1;
+  if (!text) return 0;
+
+  const queryLower = query.toLowerCase();
+  const textLower = text.toLowerCase();
+
+  if (textLower.includes(queryLower)) {
+    const index = textLower.indexOf(queryLower);
+    return 1 - (index / textLower.length) * 0.5;
+  }
+
+  let queryIndex = 0;
+
+  for (let i = 0; i < textLower.length && queryIndex < queryLower.length; i++) {
+    if (textLower[i] === queryLower[queryIndex]) {
+      queryIndex++;
+    }
+  }
+
+  const matchRatio = queryIndex / queryLower.length;
+  return queryIndex === queryLower.length ? matchRatio * 0.7 : 0;
+}
+
+function scoreCredential(credential: CredentialPublic, query: string): number {
+  const nameScore = fuzzySearch(query, credential.record_name || '');
+  const urlScore = fuzzySearch(query, credential.url || '');
+  const loginScore = fuzzySearch(query, credential.login || '');
+  return nameScore * 0.5 + urlScore * 0.3 + loginScore * 0.2;
+}
+
+function filterBySearch(
+  credentials: CredentialPublic[],
+  query: string
+): CredentialPublic[] {
+  if (!query.trim()) return credentials;
+
+  return credentials
+    .map((credential) => ({
+      ...credential,
+      searchScore: scoreCredential(credential, query),
+    }))
+    .filter((credential) => credential.searchScore > 0)
+    .sort((a, b) => b.searchScore - a.searchScore);
+}
+
+function groupByOwnership(credentials: CredentialPublic[]) {
+  const personal: CredentialPublic[] = [];
+  const teams: Record<number, CredentialPublic[]> = {};
+
+  for (const credential of credentials) {
+    if (credential.team_id) {
+      if (!teams[credential.team_id]) {
+        teams[credential.team_id] = [];
+      }
+      teams[credential.team_id].push(credential);
+    } else {
+      personal.push(credential);
+    }
+  }
+
+  return { personal, teams };
+}
+
 export function useCredentialsLogic(isAuthenticated: boolean) {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const scrollToElement = useScrollToElement();
@@ -45,72 +109,15 @@ export function useCredentialsLogic(isAuthenticated: boolean) {
     },
   });
 
-  const fuzzySearch = (query: string, text: string): number => {
-    if (!query) return 1;
-    if (!text) return 0;
+  const filteredCredentials = useMemo(
+    () => filterBySearch(credentials || [], searchQuery),
+    [credentials, searchQuery]
+  );
 
-    const queryLower = query.toLowerCase();
-    const textLower = text.toLowerCase();
-
-    if (textLower.includes(queryLower)) {
-      const index = textLower.indexOf(queryLower);
-      return 1 - (index / textLower.length) * 0.5;
-    }
-
-    let queryIndex = 0;
-    let score = 0;
-
-    for (let i = 0; i < textLower.length && queryIndex < queryLower.length; i++) {
-      if (textLower[i] === queryLower[queryIndex]) {
-        queryIndex++;
-        score += 1;
-      }
-    }
-
-    const matchRatio = queryIndex / queryLower.length;
-    return queryIndex === queryLower.length ? matchRatio * 0.7 : 0;
-  };
-
-  const filteredCredentials = useMemo(() => {
-    if (!credentials) return [];
-
-    if (!searchQuery.trim()) {
-      return credentials;
-    }
-
-    return credentials
-      .map((credential) => {
-        const nameScore = fuzzySearch(searchQuery, credential.record_name || '');
-        const urlScore = fuzzySearch(searchQuery, credential.url || '');
-        const loginScore = fuzzySearch(searchQuery, credential.login || '');
-
-        const totalScore = nameScore * 0.5 + urlScore * 0.3 + loginScore * 0.2;
-
-        return { ...credential, searchScore: totalScore };
-      })
-      .filter((credential) => credential.searchScore > 0)
-      .sort((a, b) => b.searchScore - a.searchScore);
-  }, [credentials, searchQuery]);
-
-  const groupedCredentials = useMemo(() => {
-    if (!filteredCredentials) return { personal: [], teams: {} };
-
-    const personal: CredentialPublic[] = [];
-    const teamGroups: Record<number, CredentialPublic[]> = {};
-
-    filteredCredentials.forEach((credential) => {
-      if (credential.team_id) {
-        if (!teamGroups[credential.team_id]) {
-          teamGroups[credential.team_id] = [];
-        }
-        teamGroups[credential.team_id].push(credential);
-      } else {
-        personal.push(credential);
-      }
-    });
-
-    return { personal, teams: teamGroups };
-  }, [filteredCredentials]);
+  const groupedCredentials = useMemo(
+    () => groupByOwnership(filteredCredentials),
+    [filteredCredentials]
+  );
 
   const teamsWithCredentials = useMemo(() => {
     if (!teams) return [];

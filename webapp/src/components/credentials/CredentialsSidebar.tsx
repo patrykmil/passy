@@ -27,7 +27,6 @@ export function CredentialsSidebar({
 
   return (
     <Sidebar title="My Credentials" searchInfo={searchInfo}>
-      {/* Personal Credentials */}
       {groupedCredentials.personal.length > 0 && (
         <SidebarButton
           icon={<User className="h-4 w-4" />}
@@ -38,7 +37,6 @@ export function CredentialsSidebar({
         </SidebarButton>
       )}
 
-      {/* Team Credentials */}
       {teamsWithCredentials.map((team) => (
         <SidebarButton
           key={team.id}
@@ -50,7 +48,6 @@ export function CredentialsSidebar({
         </SidebarButton>
       ))}
 
-      {/* No results message */}
       {hasNoResults && (
         <div className="px-2 py-1 text-xs text-muted-foreground">No matches found</div>
       )}

@@ -1,5 +1,5 @@
 import { Navigate } from 'react-router-dom';
-import { Plus, Users, User } from 'lucide-react';
+import { Plus, Users, User, type LucideIcon } from 'lucide-react';
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/button';
 import { CredentialCard } from '@/components/credentials/CredentialCard';
@@ -10,6 +10,52 @@ import { ReauthenticationPrompt } from '@/components/auth/ReauthenticationPrompt
 import { useUserStore } from '@/lib/stores/userStore';
 import { useCredentialsLogic } from '@/lib/hooks/useCredentialsLogic';
 import { useEncryption } from '@/lib/hooks/useEncryption';
+import type { CredentialPublic } from '@/lib/types';
+
+interface CredentialSectionProps {
+  id: string;
+  icon: LucideIcon;
+  title: string;
+  credentials: CredentialPublic[];
+  searchQuery: string;
+  onDeleteOne: (id: number) => Promise<void>;
+  onDeleteGroup: (group: string) => Promise<void>;
+}
+
+function CredentialSection({
+  id,
+  icon: Icon,
+  title,
+  credentials,
+  searchQuery,
+  onDeleteOne,
+  onDeleteGroup,
+}: CredentialSectionProps) {
+  if (credentials.length === 0) return null;
+
+  return (
+    <div id={id}>
+      <div className="flex items-center gap-2 mb-4">
+        <Icon className="h-5 w-5" />
+        <h2 className="text-xl font-semibold">{title}</h2>
+        <span className="text-sm text-muted-foreground">
+          ({credentials.length} items)
+        </span>
+      </div>
+      <div className="grid gap-4">
+        {credentials.map((credential) => (
+          <CredentialCard
+            key={credential.id}
+            credential={credential}
+            searchQuery={searchQuery}
+            onDeleteOne={onDeleteOne}
+            onDeleteGroup={onDeleteGroup}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
 
 const Credentials = () => {
   const { isAuthenticated } = useUserStore();
@@ -67,7 +113,6 @@ const Credentials = () => {
           onScrollToSection={scrollToSection}
         />
 
-        {/* Main Content */}
         <div className="flex-1 overflow-y-auto">
           <div className="p-6">
             <div className="flex justify-between items-center mb-6">
@@ -80,7 +125,6 @@ const Credentials = () => {
               </Button>
             </div>
 
-            {/* Search Bar */}
             <SearchBar
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}
@@ -88,55 +132,29 @@ const Credentials = () => {
             />
 
             <div className="space-y-8">
-              {/* Personal Credentials Section */}
-              {groupedCredentials.personal.length > 0 && (
-                <div id="personal-credentials">
-                  <div className="flex items-center gap-2 mb-4">
-                    <User className="h-5 w-5" />
-                    <h2 className="text-xl font-semibold">Personal Credentials</h2>
-                    <span className="text-sm text-muted-foreground">
-                      ({groupedCredentials.personal.length} items)
-                    </span>
-                  </div>
-                  <div className="grid gap-4">
-                    {groupedCredentials.personal.map((credential) => (
-                      <CredentialCard
-                        key={credential.id}
-                        credential={credential}
-                        searchQuery={searchQuery}
-                        onDeleteOne={handleDeleteOne}
-                        onDeleteGroup={handleDeleteGroup}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
+              <CredentialSection
+                id="personal-credentials"
+                icon={User}
+                title="Personal Credentials"
+                credentials={groupedCredentials.personal}
+                searchQuery={searchQuery}
+                onDeleteOne={handleDeleteOne}
+                onDeleteGroup={handleDeleteGroup}
+              />
 
-              {/* Team Credentials Sections */}
               {teamsWithCredentials.map((team) => (
-                <div key={team.id} id={`team-${team.id}`}>
-                  <div className="flex items-center gap-2 mb-4">
-                    <Users className="h-5 w-5" />
-                    <h2 className="text-xl font-semibold">{team.name}</h2>
-                    <span className="text-sm text-muted-foreground">
-                      ({team.credentials.length} items)
-                    </span>
-                  </div>
-                  <div className="grid gap-4">
-                    {team.credentials.map((credential) => (
-                      <CredentialCard
-                        key={credential.id}
-                        credential={credential}
-                        searchQuery={searchQuery}
-                        onDeleteOne={handleDeleteOne}
-                        onDeleteGroup={handleDeleteGroup}
-                      />
-                    ))}
-                  </div>
-                </div>
+                <CredentialSection
+                  key={team.id}
+                  id={`team-${team.id}`}
+                  icon={Users}
+                  title={team.name}
+                  credentials={team.credentials}
+                  searchQuery={searchQuery}
+                  onDeleteOne={handleDeleteOne}
+                  onDeleteGroup={handleDeleteGroup}
+                />
               ))}
 
-              {/* Empty State */}
               {groupedCredentials.personal.length === 0 &&
                 teamsWithCredentials.length === 0 && (
                   <EmptyState
