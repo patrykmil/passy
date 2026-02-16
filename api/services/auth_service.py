@@ -1,7 +1,7 @@
 from datetime import timedelta
 
 from fastapi import HTTPException, Response
-from models.team import TeamPublic
+from models.team import map_teams_to_public
 from models.user import User, UserPrivate
 from sqlmodel import Session
 from utils.auth_utils import authenticate_user
@@ -34,14 +34,8 @@ class AuthService:
             username=user.username,
             public_key=user.public_key,
             encrypted_private_key=user.encrypted_private_key,
-            member_teams=[
-                TeamPublic(id=team.id, name=team.name, code=team.code)
-                for team in user.member_teams
-            ],
-            admin_teams=[
-                TeamPublic(id=team.id, name=team.name, code=team.code)
-                for team in user.admin_teams
-            ],
+            member_teams=map_teams_to_public(user.member_teams),
+            admin_teams=map_teams_to_public(user.admin_teams),
         )
 
     def set_auth_cookie(self, response: Response, token: str) -> None:

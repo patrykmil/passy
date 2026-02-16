@@ -10,21 +10,21 @@ from api.database.database import SessionDep
 
 TokenDep = Annotated[str | None, Cookie(alias="session")]
 
+_credentials_exception = HTTPException(
+    status_code=status.HTTP_401_UNAUTHORIZED,
+    detail="Could not validate credentials",
+    headers={"WWW-Authenticate": "Bearer"},
+)
+
 
 async def get_current_user(session: SessionDep, token: TokenDep = None) -> User:
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-
     if not token:
-        raise credentials_exception
+        raise _credentials_exception
 
     username = get_username_from_token(token)
     user = get_user(username, session)
     if user is None:
-        raise credentials_exception
+        raise _credentials_exception
     return user
 
 

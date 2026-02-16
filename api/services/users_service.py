@@ -1,7 +1,7 @@
 from typing import List
 
 from fastapi import HTTPException
-from models.team import TeamPublic
+from models.team import map_teams_to_public
 from models.user import User, UserCreate, UserPrivate, UserPublic
 from sqlmodel import Session, select
 from utils.password_utils import PasswordUtils
@@ -18,14 +18,8 @@ class UsersService:
             username=user.username,
             public_key=user.public_key,
             encrypted_private_key=user.encrypted_private_key,
-            member_teams=[
-                TeamPublic(id=team.id, name=team.name, code=team.code)
-                for team in user.member_teams
-            ],
-            admin_teams=[
-                TeamPublic(id=team.id, name=team.name, code=team.code)
-                for team in user.admin_teams
-            ],
+            member_teams=map_teams_to_public(user.member_teams),
+            admin_teams=map_teams_to_public(user.admin_teams),
         )
 
     def get_user_by_id(self, user_id: int) -> UserPublic:

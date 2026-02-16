@@ -69,6 +69,10 @@ class TeamCreate(TeamBase):
     admin_id: int
 
 
+def map_teams_to_public(teams: list["Team"]) -> list["TeamPublic"]:
+    return [TeamPublic(id=team.id, name=team.name, code=team.code) for team in teams]
+
+
 class TeamApplication(SQLModel):
     team_code: str
 
