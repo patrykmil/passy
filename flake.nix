@@ -27,8 +27,6 @@
           sqlite
           ruff
           prettier
-          texliveFull
-          tex-fmt
         ];
 
         pythonModules = with pkgs.python313Packages; [
