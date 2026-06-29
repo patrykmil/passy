@@ -47,14 +47,14 @@ start_bg() {
 
 if [ "$MODE" = "dev" ]; then
   start_bg "$API_DIR" fastapi dev
-  start_bg "$WEB_DIR" bun dev
+  start_bg "$WEB_DIR" pnpm dev
 else
   (
     cd "$WEB_DIR" || exit 1
-    bun run build
+    pnpm run build
   )
   start_bg "$API_DIR" fastapi run
-  start_bg "$WEB_DIR" bun run preview
+  start_bg "$WEB_DIR" pnpm run preview
 fi
 
 if wait -n; then

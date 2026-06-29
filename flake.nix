@@ -23,7 +23,8 @@
 
         basePackages = with pkgs; [
           python313
-          bun
+          nodejs
+          pnpm
           sqlite
           ruff
           prettier
@@ -51,11 +52,11 @@
 
           shellHook = ''
             if [ ! -d ./webapp/node_modules ]; then
-              echo "webapp/node_modules not found - running 'bun install'"
-              if command -v bun >/dev/null 2>&1; then
-                (cd ./webapp && bun install) || echo "bun install failed"
+              echo "webapp/node_modules not found - running 'pnpm install'"
+              if command -v pnpm >/dev/null 2>&1; then
+                (cd ./webapp && pnpm install) || echo "pnpm install failed"
               else
-                echo "bun not available in PATH"
+                echo "pnpm not available in PATH"
               fi
             fi
 

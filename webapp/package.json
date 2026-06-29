@@ -4,8 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "bunx --bun vite",
-    "build": "bunx --bun vite build",
+    "dev": "pnpm vite",
+    "build": "pnpm vite build",
     "lint": "eslint .",
     "preview": "vite preview"
   },
