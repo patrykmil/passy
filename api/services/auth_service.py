@@ -1,8 +1,7 @@
 from datetime import timedelta
 
 from fastapi import Response
-from models.team import map_teams_to_public
-from models.user import User, UserPrivate
+from models.user import User
 from services.base_service import BaseService
 from utils.auth_utils import authenticate_user
 from utils.exceptions import exception_incorrect_credentials
@@ -21,16 +20,6 @@ class AuthService(BaseService):
         )
 
         return user, access_token
-
-    def create_user_response(self, user: User) -> UserPrivate:
-        return UserPrivate(
-            id=user.id,
-            username=user.username,
-            public_key=user.public_key,
-            encrypted_private_key=user.encrypted_private_key,
-            member_teams=map_teams_to_public(user.member_teams),
-            admin_teams=map_teams_to_public(user.admin_teams),
-        )
 
     def set_auth_cookie(self, response: Response, token: str) -> None:
         response.set_cookie(

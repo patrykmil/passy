@@ -23,6 +23,12 @@ class TeamsService(BaseService):
         super().__init__(session)
         self.credentials_service = CredentialsService(session)
 
+    @staticmethod
+    def _is_team_admin(user: User, team_id: int | None) -> bool:
+        if team_id is None or team_id == 0:
+            return False
+        return any(team.id == team_id for team in user.admin_teams)
+
     def _is_user_admin_of_team(self, user: User, team: Team) -> bool:
         return any(admin.id == user.id for admin in team.admins)
 
