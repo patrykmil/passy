@@ -63,27 +63,6 @@ async function createPersonalCredential(
   return buildCredentialData(values, encryptedPassword, { team_id: undefined });
 }
 
-async function encryptAndCreateForMember(
-  memberId: number,
-  values: { record_name: string; url?: string; login: string; password: string },
-  teamId: number,
-  groupToken: string
-): Promise<void> {
-  const memberUser = await userApi.getUserById(memberId);
-  if (!memberUser.public_key) {
-    throw new Error(`No public key found for user ${memberUser.username}`);
-  }
-
-  const encryptedPassword = encryptTeamPassword(values.password, memberUser.public_key);
-  const credentialData = buildCredentialData(values, encryptedPassword, {
-    team_id: teamId,
-    user_id: memberId,
-    group: groupToken,
-  });
-
-  await credentialsApi.createCredential(credentialData);
-}
-
 async function createTeamCredentials(
   values: { record_name: string; url?: string; login: string; password: string },
   teamId: number,
@@ -91,9 +70,27 @@ async function createTeamCredentials(
 ): Promise<void> {
   const groupToken = generateGroupToken(24);
 
+  const credentialDataList: CredentialCreate[] = [];
   for (const memberId of memberIds) {
-    await encryptAndCreateForMember(memberId, values, teamId, groupToken);
+    const memberUser = await userApi.getUserById(memberId);
+    if (!memberUser.public_key) {
+      throw new Error(`No public key found for user ${memberUser.username}`);
+    }
+
+    const encryptedPassword = encryptTeamPassword(
+      values.password,
+      memberUser.public_key
+    );
+    credentialDataList.push(
+      buildCredentialData(values, encryptedPassword, {
+        team_id: teamId,
+        user_id: memberId,
+        group: groupToken,
+      })
+    );
   }
+
+  await credentialsApi.createCredentialBatch(credentialDataList);
 }
 
 export function useAddCredential() {

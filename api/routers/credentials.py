@@ -36,6 +36,15 @@ async def add_credential(
     return credentials_service.add_credential(credential, current_user)
 
 
+@router.post("/batch", response_model=list[CredentialPublic])
+async def add_credentials_batch(
+    credentials: list[CredentialCreate],
+    credentials_service: CredentialsServiceDep,
+    current_user: CurrentUser,
+):
+    return credentials_service.add_credentials_batch(credentials, current_user)
+
+
 @router.put("/group/{group}", response_model=CredentialPublic)
 async def update_credential_group(
     group: str,

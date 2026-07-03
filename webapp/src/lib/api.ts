@@ -246,6 +246,17 @@ export const credentialsApi = {
     }
   },
 
+  createCredentialBatch: async (
+    credentials: CredentialCreate[]
+  ): Promise<CredentialPublic[]> => {
+    try {
+      const response = await api.post('/credentials/batch', credentials);
+      return response.data;
+    } catch (error) {
+      return handleApiError(error, 'Failed to create credentials');
+    }
+  },
+
   updateCredentialOne: async (
     id: number,
     credentialData: CredentialUpdate

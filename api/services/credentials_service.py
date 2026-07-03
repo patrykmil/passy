@@ -70,21 +70,6 @@ class CredentialsService:
             select(Credential).where(Credential.group == group)
         ).first()
 
-    def _find_or_create_credential(
-        self, credential_data: CredentialCreate
-    ) -> Credential:
-        db_credential = None
-        if credential_data.group:
-            db_credential = self._find_credential_by_group(credential_data.group)
-
-        if not db_credential:
-            db_credential = Credential.model_validate(credential_data.model_dump())
-            self.session.add(db_credential)
-            self.session.commit()
-            self.session.refresh(db_credential)
-
-        return db_credential
-
     def _persist_and_refresh(self, *objects) -> None:
         for obj in objects:
             self.session.add(obj)
@@ -112,13 +97,25 @@ class CredentialsService:
             return False
         return _is_team_admin(user, db_credential.team_id)
 
+    def _ensure_credential(self, credential_data: CredentialCreate) -> Credential:
+        db_credential = None
+        if credential_data.group:
+            db_credential = self._find_credential_by_group(credential_data.group)
+
+        if not db_credential:
+            db_credential = Credential.model_validate(credential_data.model_dump())
+            self.session.add(db_credential)
+            self.session.flush()
+
+        return db_credential
+
     def add_credential(
         self, credential_data: CredentialCreate, user: User
     ) -> CredentialPublic:
         if not self.is_permitted_to_add(user=user, team_id=credential_data.team_id):
             raise HTTPException(status_code=403, detail="Unauthorized access")
 
-        db_credential = self._find_or_create_credential(credential_data)
+        db_credential = self._ensure_credential(credential_data)
 
         db_secret = CredentialSecret(
             password=credential_data.password,
@@ -129,6 +126,32 @@ class CredentialsService:
         self.session.commit()
 
         return _to_public(db_credential, db_secret)
+
+    def add_credentials_batch(
+        self, credentials: list[CredentialCreate], user: User
+    ) -> list[CredentialPublic]:
+        for cred in credentials:
+            if not self.is_permitted_to_add(user=user, team_id=cred.team_id):
+                raise HTTPException(status_code=403, detail="Unauthorized access")
+
+        cred_secret_pairs = []
+        for cred_data in credentials:
+            db_credential = self._ensure_credential(cred_data)
+            db_secret = CredentialSecret(
+                password=cred_data.password,
+                user_id=cred_data.user_id if cred_data.user_id else user.id,
+                credential_id=db_credential.id,
+            )
+            self.session.add(db_secret)
+            cred_secret_pairs.append((db_credential, db_secret))
+
+        self.session.commit()
+
+        for cred, secret in cred_secret_pairs:
+            self.session.refresh(cred)
+            self.session.refresh(secret)
+
+        return [_to_public(cred, secret) for cred, secret in cred_secret_pairs]
 
     def get_my_credentials(self, user: User) -> list[CredentialPublic]:
         user_credentials = self.session.exec(
