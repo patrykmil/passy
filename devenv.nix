@@ -40,13 +40,4 @@
       cwd = "${config.git.root}/webapp";
     };
   };
-
-  git-hooks = {
-    enable = false;
-    hooks = {
-      ruff.enable = true;
-      ruff-format.enable = true;
-      prettier.enable = true;
-    };
-  };
 }
