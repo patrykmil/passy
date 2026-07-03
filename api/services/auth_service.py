@@ -1,25 +1,19 @@
 from datetime import timedelta
 
-from fastapi import HTTPException, Response
+from fastapi import Response
 from models.team import map_teams_to_public
 from models.user import User, UserPrivate
-from sqlmodel import Session
+from services.base_service import BaseService
 from utils.auth_utils import authenticate_user
+from utils.exceptions import exception_incorrect_credentials
 from utils.jwt_utils import create_access_token
 
 
-class AuthService:
-    def __init__(self, session: Session):
-        self.session = session
-
+class AuthService(BaseService):
     def login_user(self, username: str, password: str) -> tuple[User, str]:
         user = authenticate_user(username, password, self.session)
         if not user:
-            raise HTTPException(
-                status_code=400,
-                detail="Incorrect username or password",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
+            raise exception_incorrect_credentials()
 
         access_token_expires = timedelta(minutes=30)
         access_token = create_access_token(

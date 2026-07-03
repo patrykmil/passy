@@ -1,15 +1,16 @@
 from typing import List
 
-from fastapi import HTTPException
 from models.team import map_teams_to_public
 from models.user import User, UserCreate, UserPrivate, UserPublic
-from sqlmodel import Session, select
+from services.base_service import BaseService
+from sqlmodel import select
+from utils.exceptions import exception_invalid
 from utils.password_utils import PasswordUtils
 
 
-class UsersService:
-    def __init__(self, session: Session):
-        self.session = session
+class UsersService(BaseService):
+    def __init__(self, session):
+        super().__init__(session)
         self.password_utils = PasswordUtils()
 
     def get_current_user_info(self, user: User) -> UserPrivate:
@@ -34,7 +35,7 @@ class UsersService:
         if self.session.exec(
             select(User).where(User.username == user_data.username)
         ).first():
-            raise HTTPException(status_code=400, detail="Username already exists")
+            raise exception_invalid(detail="Username already exists")
 
         hashed = self.password_utils.hash_password(user_data.password)
         db_user = User(
@@ -58,7 +59,7 @@ class UsersService:
         encrypted_private_key: str,
     ) -> None:
         if not self.password_utils.verify_password(user.hashed_password, old_password):
-            raise HTTPException(status_code=400, detail="Old password is incorrect")
+            raise exception_invalid(detail="Old password is incorrect")
 
         user.hashed_password = self.password_utils.hash_password(new_password)
         user.encrypted_private_key = encrypted_private_key

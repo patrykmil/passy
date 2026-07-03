@@ -42,7 +42,7 @@
   };
 
   git-hooks = {
-    enable = true;
+    enable = false;
     hooks = {
       ruff.enable = true;
       ruff-format.enable = true;

@@ -1,7 +1,6 @@
 import secrets
 from typing import Any, Dict, List
 
-from fastapi import HTTPException
 from models.team import (
     Team,
     TeamAdminLink,
@@ -13,13 +12,15 @@ from models.team import (
     TeamPublic,
 )
 from models.user import User
+from services.base_service import BaseService
 from services.credentials_service import CredentialsService
-from sqlmodel import Session, select
+from sqlmodel import select
+from utils.exceptions import exception_forbidden, exception_invalid, exception_not_found
 
 
-class TeamsService:
-    def __init__(self, session: Session):
-        self.session = session
+class TeamsService(BaseService):
+    def __init__(self, session):
+        super().__init__(session)
         self.credentials_service = CredentialsService(session)
 
     def _is_user_admin_of_team(self, user: User, team: Team) -> bool:
@@ -36,9 +37,7 @@ class TeamsService:
 
     def _require_admin(self, user: User, team: Team) -> None:
         if not self._is_user_admin_of_team(user, team):
-            raise HTTPException(
-                status_code=403, detail="You are not an admin of this team"
-            )
+            raise exception_forbidden("You are not an admin of this team")
 
     def _build_team_detailed(self, team: Team, is_admin: bool) -> TeamDetailed:
         return TeamDetailed(
@@ -46,12 +45,8 @@ class TeamsService:
             name=team.name,
             code=team.code,
             admins=[self._format_user_dict(admin) for admin in team.admins],
-            members=[self._format_user_dict(member) for member in team.members]
-            if is_admin
-            else [],
-            awaiting=[self._format_user_dict(awaiting) for awaiting in team.awaiting]
-            if is_admin
-            else [],
+            members=[self._format_user_dict(member) for member in team.members] if is_admin else [],
+            awaiting=[self._format_user_dict(awaiting) for awaiting in team.awaiting] if is_admin else [],
         )
 
     def _get_unique_user_teams(self, user: User) -> list[Team]:
@@ -63,9 +58,7 @@ class TeamsService:
                 unique_teams.append(team)
         return unique_teams
 
-    def _to_application_response(
-        self, team: Team, user_app: User
-    ) -> TeamApplicationResponse:
+    def _to_application_response(self, team: Team, user_app: User) -> TeamApplicationResponse:
         return TeamApplicationResponse(
             application_id=f"{team.id}_{user_app.id}",
             user_id=user_app.id or 0,
@@ -76,9 +69,7 @@ class TeamsService:
 
     def _find_application(self, team_id: int, user_id: int) -> TeamAwaiting | None:
         return self.session.exec(
-            select(TeamAwaiting).where(
-                TeamAwaiting.team_id == team_id, TeamAwaiting.user_id == user_id
-            )
+            select(TeamAwaiting).where(TeamAwaiting.team_id == team_id, TeamAwaiting.user_id == user_id)
         ).first()
 
     def _add_role_link(self, team_id: int, user_id: int, role: str) -> None:
@@ -87,9 +78,7 @@ class TeamsService:
         else:
             self.session.add(TeamMemberLink(team_id=team_id, user_id=user_id))
 
-    def _find_user_team_link(
-        self, user_id: int | None, team_id: int
-    ) -> TeamMemberLink | TeamAdminLink | None:
+    def _find_user_team_link(self, user_id: int | None, team_id: int) -> TeamMemberLink | TeamAdminLink | None:
         member_link = self.session.exec(
             select(TeamMemberLink).where(
                 TeamMemberLink.user_id == user_id,
@@ -113,28 +102,20 @@ class TeamsService:
     def get_my_teams(self, user: User) -> List[TeamDetailed]:
         unique_teams = self._get_unique_user_teams(user)
         return [
-            self._build_team_detailed(team, self._is_user_admin_of_team(user, team))
-            for team in unique_teams
+            self._build_team_detailed(team, self._is_user_admin_of_team(user, team)) for team in unique_teams
         ]
 
     def apply_to_team(self, team_code: str, user: User) -> Dict[str, str]:
         team = self.session.exec(select(Team).where(Team.code == team_code)).first()
 
         if not team:
-            raise HTTPException(status_code=400, detail="Invalid team code")
+            raise exception_invalid("Invalid team code")
 
-        if self._is_user_member_of_team(user, team) or self._is_user_admin_of_team(
-            user, team
-        ):
-            raise HTTPException(
-                status_code=400, detail="You are already a member of this team"
-            )
+        if self._is_user_member_of_team(user, team) or self._is_user_admin_of_team(user, team):
+            raise exception_invalid("You are already a member of this team")
 
         if self._is_user_awaiting_team(user, team):
-            raise HTTPException(
-                status_code=400,
-                detail="You already have a pending application for this team",
-            )
+            raise exception_invalid(detail="You already have a pending application for this team")
 
         team_await = TeamAwaiting(team_id=team.id, user_id=user.id)
         self.session.add(team_await)
@@ -142,17 +123,13 @@ class TeamsService:
 
         return {"message": "Application submitted successfully"}
 
-    def get_team_applications(
-        self, team_id: int, user: User
-    ) -> List[TeamApplicationResponse]:
+    def get_team_applications(self, team_id: int, user: User) -> List[TeamApplicationResponse]:
         team = self.session.get_one(Team, team_id)
 
         if not self._is_user_admin_of_team(user, team):
             return []
 
-        return [
-            self._to_application_response(team, user_app) for user_app in team.awaiting
-        ]
+        return [self._to_application_response(team, user_app) for user_app in team.awaiting]
 
     def respond_to_application(
         self,
@@ -166,7 +143,7 @@ class TeamsService:
 
         application = self._find_application(team_id, user_id)
         if not application:
-            raise HTTPException(status_code=404, detail="Application not found")
+            raise exception_not_found(detail="Application not found")
 
         self.session.delete(application)
 
@@ -195,14 +172,12 @@ class TeamsService:
         current_user: User,
     ) -> TeamPublic:
         if not team_id or team_id <= 0 or not self.session.get(Team, team_id):
-            raise HTTPException(status_code=400, detail="Invalid team ID")
+            raise exception_invalid(detail="Invalid team ID")
 
         current_user_admin_team_ids = {team.id for team in current_user.admin_teams}
 
         if team_id not in current_user_admin_team_ids:
-            raise HTTPException(
-                status_code=403, detail="You are not an admin of this team"
-            )
+            raise exception_forbidden(detail="You are not an admin of this team")
 
         team = self.session.get_one(Team, team_id)
         return TeamPublic.model_validate(team.model_dump())
@@ -238,7 +213,7 @@ class TeamsService:
         ).first()
 
         if not team_member_link:
-            raise HTTPException(status_code=404, detail="Member not found in a team")
+            raise exception_not_found(detail="Member not found in a team")
 
         self.session.delete(team_member_link)
         self.session.commit()
@@ -255,14 +230,12 @@ class TeamsService:
         link = self._find_user_team_link(current_user.id, team_id)
 
         if not link:
-            raise HTTPException(status_code=404, detail="Member not found in a team")
+            raise exception_not_found(detail="Member not found in a team")
 
         self.session.delete(link)
         self.session.commit()
 
         if current_user.id:
-            self.credentials_service.purge_credentials(
-                user_id=current_user.id, team_id=team_id
-            )
+            self.credentials_service.purge_credentials(user_id=current_user.id, team_id=team_id)
 
         return {"message": "Member removed from team successfully"}
