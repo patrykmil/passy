@@ -44,13 +44,8 @@
   git-hooks = {
     enable = true;
     hooks = {
-      ruff-format = {
-        enable = true;
-        name = "ruff format";
-        entry = "ruff format --write";
-        files = "\\.py$";
-      };
-
+      ruff.enable = true;
+      ruff-format.enable = true;
       prettier.enable = true;
     };
   };
