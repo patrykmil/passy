@@ -51,8 +51,12 @@ class TeamsService(BaseService):
             name=team.name,
             code=team.code,
             admins=[self._format_user_dict(admin) for admin in team.admins],
-            members=[self._format_user_dict(member) for member in team.members] if is_admin else [],
-            awaiting=[self._format_user_dict(awaiting) for awaiting in team.awaiting] if is_admin else [],
+            members=[self._format_user_dict(member) for member in team.members]
+            if is_admin
+            else [],
+            awaiting=[self._format_user_dict(awaiting) for awaiting in team.awaiting]
+            if is_admin
+            else [],
         )
 
     def _get_unique_user_teams(self, user: User) -> list[Team]:
@@ -64,7 +68,9 @@ class TeamsService(BaseService):
                 unique_teams.append(team)
         return unique_teams
 
-    def _to_application_response(self, team: Team, user_app: User) -> TeamApplicationResponse:
+    def _to_application_response(
+        self, team: Team, user_app: User
+    ) -> TeamApplicationResponse:
         return TeamApplicationResponse(
             application_id=f"{team.id}_{user_app.id}",
             user_id=user_app.id or 0,
@@ -75,7 +81,9 @@ class TeamsService(BaseService):
 
     def _find_application(self, team_id: int, user_id: int) -> TeamAwaiting | None:
         return self.session.exec(
-            select(TeamAwaiting).where(TeamAwaiting.team_id == team_id, TeamAwaiting.user_id == user_id)
+            select(TeamAwaiting).where(
+                TeamAwaiting.team_id == team_id, TeamAwaiting.user_id == user_id
+            )
         ).first()
 
     def _add_role_link(self, team_id: int, user_id: int, role: str) -> None:
@@ -84,7 +92,9 @@ class TeamsService(BaseService):
         else:
             self.session.add(TeamMemberLink(team_id=team_id, user_id=user_id))
 
-    def _find_user_team_link(self, user_id: int | None, team_id: int) -> TeamMemberLink | TeamAdminLink | None:
+    def _find_user_team_link(
+        self, user_id: int | None, team_id: int
+    ) -> TeamMemberLink | TeamAdminLink | None:
         member_link = self.session.exec(
             select(TeamMemberLink).where(
                 TeamMemberLink.user_id == user_id,
@@ -108,7 +118,8 @@ class TeamsService(BaseService):
     def get_my_teams(self, user: User) -> List[TeamDetailed]:
         unique_teams = self._get_unique_user_teams(user)
         return [
-            self._build_team_detailed(team, self._is_user_admin_of_team(user, team)) for team in unique_teams
+            self._build_team_detailed(team, self._is_user_admin_of_team(user, team))
+            for team in unique_teams
         ]
 
     def apply_to_team(self, team_code: str, user: User) -> Dict[str, str]:
@@ -117,11 +128,15 @@ class TeamsService(BaseService):
         if not team:
             raise exception_invalid("Invalid team code")
 
-        if self._is_user_member_of_team(user, team) or self._is_user_admin_of_team(user, team):
+        if self._is_user_member_of_team(user, team) or self._is_user_admin_of_team(
+            user, team
+        ):
             raise exception_invalid("You are already a member of this team")
 
         if self._is_user_awaiting_team(user, team):
-            raise exception_invalid(detail="You already have a pending application for this team")
+            raise exception_invalid(
+                detail="You already have a pending application for this team"
+            )
 
         team_await = TeamAwaiting(team_id=team.id, user_id=user.id)
         self.session.add(team_await)
@@ -129,13 +144,17 @@ class TeamsService(BaseService):
 
         return {"message": "Application submitted successfully"}
 
-    def get_team_applications(self, team_id: int, user: User) -> List[TeamApplicationResponse]:
+    def get_team_applications(
+        self, team_id: int, user: User
+    ) -> List[TeamApplicationResponse]:
         team = self.session.get_one(Team, team_id)
 
         if not self._is_user_admin_of_team(user, team):
             return []
 
-        return [self._to_application_response(team, user_app) for user_app in team.awaiting]
+        return [
+            self._to_application_response(team, user_app) for user_app in team.awaiting
+        ]
 
     def respond_to_application(
         self,
@@ -242,6 +261,8 @@ class TeamsService(BaseService):
         self.session.commit()
 
         if current_user.id:
-            self.credentials_service.purge_credentials(user_id=current_user.id, team_id=team_id)
+            self.credentials_service.purge_credentials(
+                user_id=current_user.id, team_id=team_id
+            )
 
         return {"message": "Member removed from team successfully"}

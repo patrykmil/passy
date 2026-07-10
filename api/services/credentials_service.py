@@ -15,7 +15,9 @@ class CredentialsService(BaseService):
     # --- helpers ---
 
     @staticmethod
-    def _to_public(credential: Credential, secret: CredentialSecret) -> CredentialPublic:
+    def _to_public(
+        credential: Credential, secret: CredentialSecret
+    ) -> CredentialPublic:
         return CredentialPublic.model_validate(
             {
                 **credential.model_dump(),
@@ -47,7 +49,9 @@ class CredentialsService(BaseService):
             credential_id=credential_id,
         )
 
-    def _get_user_secret(self, credential_id: int, user_id: int) -> CredentialSecret | None:
+    def _get_user_secret(
+        self, credential_id: int, user_id: int
+    ) -> CredentialSecret | None:
         return self.session.exec(
             select(CredentialSecret).where(
                 CredentialSecret.credential_id == credential_id,
@@ -58,12 +62,16 @@ class CredentialsService(BaseService):
     def _get_secrets_for_credential(self, credential_id: int) -> list[CredentialSecret]:
         return list(
             self.session.exec(
-                select(CredentialSecret).where(CredentialSecret.credential_id == credential_id)
+                select(CredentialSecret).where(
+                    CredentialSecret.credential_id == credential_id
+                )
             ).all()
         )
 
     def _find_credential_by_group(self, group: str) -> Credential | None:
-        return self.session.exec(select(Credential).where(Credential.group == group)).first()
+        return self.session.exec(
+            select(Credential).where(Credential.group == group)
+        ).first()
 
     def _ensure_credential(self, credential_data: CredentialCreate) -> Credential:
         if credential_data.group:
@@ -76,7 +84,9 @@ class CredentialsService(BaseService):
         self.session.flush()
         return db_credential
 
-    def _add_one(self, credential_data: CredentialCreate, user: User) -> tuple[Credential, CredentialSecret]:
+    def _add_one(
+        self, credential_data: CredentialCreate, user: User
+    ) -> tuple[Credential, CredentialSecret]:
         db_credential = self._ensure_credential(credential_data)
         db_secret = self._build_secret(
             password=credential_data.password,
@@ -103,7 +113,9 @@ class CredentialsService(BaseService):
 
         return TeamsService._is_team_admin(user, team_id)
 
-    def is_permitted_to_delete_one(self, user: User, credential_id: int) -> Credential | None:
+    def is_permitted_to_delete_one(
+        self, user: User, credential_id: int
+    ) -> Credential | None:
         db_credential = self.session.get_one(Credential, credential_id)
         db_secret = self._get_user_secret(credential_id, user.id)
         if db_secret:
@@ -120,7 +132,9 @@ class CredentialsService(BaseService):
 
     # --- create ---
 
-    def add_credential(self, credential_data: CredentialCreate, user: User) -> CredentialPublic:
+    def add_credential(
+        self, credential_data: CredentialCreate, user: User
+    ) -> CredentialPublic:
         if not self.is_permitted_to_add(user=user, team_id=credential_data.team_id):
             raise exception_forbidden()
 
@@ -128,12 +142,16 @@ class CredentialsService(BaseService):
         self.session.commit()
         return self._to_public(db_credential, db_secret)
 
-    def add_credentials_batch(self, credentials: list[CredentialCreate], user: User) -> list[CredentialPublic]:
+    def add_credentials_batch(
+        self, credentials: list[CredentialCreate], user: User
+    ) -> list[CredentialPublic]:
         for cred in credentials:
             if not self.is_permitted_to_add(user=user, team_id=cred.team_id):
                 raise exception_forbidden()
 
-        cred_secret_pairs = [self._add_one(cred_data, user) for cred_data in credentials]
+        cred_secret_pairs = [
+            self._add_one(cred_data, user) for cred_data in credentials
+        ]
 
         self.session.commit()
 
@@ -165,8 +183,12 @@ class CredentialsService(BaseService):
 
         return self._to_public(db_credential, db_secret)
 
-    def get_credential_by_group(self, credential_group: str, user: User) -> list[CredentialPublic]:
-        db_credential = self.session.exec(select(Credential).where(Credential.group == credential_group)).one()
+    def get_credential_by_group(
+        self, credential_group: str, user: User
+    ) -> list[CredentialPublic]:
+        db_credential = self.session.exec(
+            select(Credential).where(Credential.group == credential_group)
+        ).one()
         if not db_credential:
             raise exception_not_found("Credential not found")
 
@@ -207,7 +229,9 @@ class CredentialsService(BaseService):
             self.session.commit()
 
     def delete_credential_group(self, credential_group: str, user: User) -> dict:
-        if not self.is_permitted_to_delete_admin(user=user, credential_group=credential_group):
+        if not self.is_permitted_to_delete_admin(
+            user=user, credential_group=credential_group
+        ):
             raise exception_forbidden()
 
         team_credential = self.session.exec(
@@ -243,7 +267,9 @@ class CredentialsService(BaseService):
     def update_credential_group(
         self, credential_group: str, credential_data: CredentialUpdate, user: User
     ) -> CredentialPublic:
-        if not self.is_permitted_to_delete_admin(user=user, credential_group=credential_group):
+        if not self.is_permitted_to_delete_admin(
+            user=user, credential_group=credential_group
+        ):
             raise exception_forbidden()
 
         update_data = credential_data.model_dump(exclude_unset=True)
@@ -267,7 +293,11 @@ class CredentialsService(BaseService):
     def update_private_credentials_batch(
         self, credentials: list[CredentialUpdate], user: User
     ) -> list[CredentialPublic]:
-        return [self.update_credential_one(cred.id, cred, user) for cred in credentials if cred.id is not None]
+        return [
+            self.update_credential_one(cred.id, cred, user)
+            for cred in credentials
+            if cred.id is not None
+        ]
 
     # --- purge ---
 
@@ -275,7 +305,9 @@ class CredentialsService(BaseService):
         credentials = self.session.exec(
             select(Credential, CredentialSecret)
             .join(CredentialSecret)
-            .where((CredentialSecret.user_id == user_id) & (Credential.team_id == team_id))
+            .where(
+                (CredentialSecret.user_id == user_id) & (Credential.team_id == team_id)
+            )
         ).all()
 
         for cred, secret in credentials:
