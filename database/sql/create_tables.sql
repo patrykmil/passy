@@ -8,6 +8,7 @@ DROP TABLE IF EXISTS "CredentialSecret";
 DROP TABLE IF EXISTS "Credential";
 DROP TABLE IF EXISTS "Team";
 DROP TABLE IF EXISTS "User";
+DROP TABLE IF EXISTS "LoginAttempt";
 
 CREATE TABLE IF NOT EXISTS "User" (
     "id" INTEGER PRIMARY KEY NOT NULL,
@@ -70,6 +71,12 @@ CREATE TABLE IF NOT EXISTS "TeamAwaiting" (
     PRIMARY KEY ("team_id", "user_id"),
     FOREIGN KEY("team_id") REFERENCES "Team"("id"),
     FOREIGN KEY("user_id") REFERENCES "User"("id")
+);
+
+CREATE TABLE IF NOT EXISTS "LoginAttempt" (
+    "id" INTEGER PRIMARY KEY NOT NULL,
+    "username" TEXT NOT NULL,
+    "timestamp" DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 COMMIT;

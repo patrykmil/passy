@@ -3,15 +3,27 @@ from datetime import timedelta
 from fastapi import Response
 from models.user import User
 from services.base_service import BaseService
-from utils.auth_utils import authenticate_user
+from utils.auth_utils import (
+    add_login_attempt,
+    authenticate_user,
+    get_user,
+    waiting_login_allowed,
+)
 from utils.exceptions import exception_incorrect_credentials
 from utils.jwt_utils import create_access_token
+
+from api.utils.exceptions import exception_too_many_login_attempts
 
 
 class AuthService(BaseService):
     def login_user(self, username: str, password: str) -> tuple[User, str]:
-        user = authenticate_user(username, password, self.session)
+        time = waiting_login_allowed(username=username, session=self.session)
+        if time:
+            raise exception_too_many_login_attempts(time_left=time)
+        user = get_user(username, self.session)
+        user = authenticate_user(user, password, self.session)
         if not user:
+            add_login_attempt(username=username, session=self.session)
             raise exception_incorrect_credentials()
 
         access_token_expires = timedelta(minutes=30)

@@ -22,4 +22,17 @@ def exception_invalid(detail: str = "Invalid request"):
 
 
 def exception_unauthorized(detail: str = "Unauthorized access"):
-    return HTTPException(status_code=401, detail=detail, headers={"WWW-Authenticate": "Bearer"})
+    return HTTPException(
+        status_code=401, detail=detail, headers={"WWW-Authenticate": "Bearer"}
+    )
+
+
+def exception_too_many_login_attempts(
+    time_left: int,
+    detail: str = "Too many failed login attempts. Please try again in {} seconds.",
+):
+    raise HTTPException(
+        status_code=429,
+        detail=detail.format(time_left),
+        headers={"Retry-After": str(time_left)},
+    )
