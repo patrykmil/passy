@@ -1,5 +1,5 @@
 import secrets
-from typing import Any, Dict, List
+from typing import Any
 
 from models.team import (
     Team,
@@ -111,18 +111,18 @@ class TeamsService(BaseService):
             )
         ).first()
 
-    def get_all_teams(self) -> List[TeamPublic]:
+    def get_all_teams(self) -> list[TeamPublic]:
         teams = self.session.exec(select(Team)).all()
         return [TeamPublic.model_validate(team.model_dump()) for team in teams]
 
-    def get_my_teams(self, user: User) -> List[TeamDetailed]:
+    def get_my_teams(self, user: User) -> list[TeamDetailed]:
         unique_teams = self._get_unique_user_teams(user)
         return [
             self._build_team_detailed(team, self._is_user_admin_of_team(user, team))
             for team in unique_teams
         ]
 
-    def apply_to_team(self, team_code: str, user: User) -> Dict[str, str]:
+    def apply_to_team(self, team_code: str, user: User) -> dict[str, str]:
         team = self.session.exec(select(Team).where(Team.code == team_code)).first()
 
         if not team:
@@ -146,7 +146,7 @@ class TeamsService(BaseService):
 
     def get_team_applications(
         self, team_id: int, user: User
-    ) -> List[TeamApplicationResponse]:
+    ) -> list[TeamApplicationResponse]:
         team = self.session.get_one(Team, team_id)
 
         if not self._is_user_admin_of_team(user, team):
@@ -162,7 +162,7 @@ class TeamsService(BaseService):
         user_id: int,
         action: TeamApplicationAction,
         current_user: User,
-    ) -> Dict[str, str]:
+    ) -> dict[str, str]:
         team = self.session.get_one(Team, team_id)
         self._require_admin(current_user, team)
 
@@ -180,7 +180,7 @@ class TeamsService(BaseService):
             self.session.commit()
             return {"message": "Application declined"}
 
-    def get_my_applications(self, user: User) -> List[Dict[str, Any]]:
+    def get_my_applications(self, user: User) -> list[dict[str, Any]]:
         return [
             {
                 "team_id": team.id,

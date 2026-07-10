@@ -1,5 +1,3 @@
-from typing import List
-
 from models.team import map_teams_to_public
 from models.user import User, UserCreate, UserPrivate, UserPublic
 from services.base_service import BaseService
@@ -27,7 +25,7 @@ class UsersService(BaseService):
         user = self.session.get_one(User, user_id)
         return UserPublic.model_validate(user.model_dump())
 
-    def get_all_users(self) -> List[UserPublic]:
+    def get_all_users(self) -> list[UserPublic]:
         users = self.session.exec(select(User)).all()
         return [UserPublic.model_validate(user.model_dump()) for user in users]
 

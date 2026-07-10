@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, Optional
 
 from models.team import TeamAdminLink, TeamAwaiting, TeamMemberLink, TeamPublic
 from sqlmodel import Field, Relationship, SQLModel
@@ -31,16 +31,16 @@ class UserPrivate(UserBase):
     id: Optional[int] = Field(default=None, primary_key=True)
     public_key: Optional[str] = Field(default=None)
     encrypted_private_key: Optional[str] = Field(default=None)
-    member_teams: List[TeamPublic] = Field(default_factory=list)
-    admin_teams: List[TeamPublic] = Field(default_factory=list)
+    member_teams: list[TeamPublic] = Field(default_factory=list)
+    admin_teams: list[TeamPublic] = Field(default_factory=list)
 
 
 class UserPublic(UserBase):
     id: Optional[int] = Field(default=None, primary_key=True)
     public_key: Optional[str] = Field(default=None)
     encrypted_private_key: Optional[str] = Field(default=None)
-    member_teams: List[TeamPublic] = Field(default_factory=list)
-    admin_teams: List[TeamPublic] = Field(default_factory=list)
+    member_teams: list[TeamPublic] = Field(default_factory=list)
+    admin_teams: list[TeamPublic] = Field(default_factory=list)
 
 
 class UserCreate(UserBase):
