@@ -44,7 +44,9 @@ def waiting_login_allowed(
     return 0
 
 
-def authenticate_user(user: User, password: str, session: SessionDep) -> User | None:
+def authenticate_user(
+    user: User | None, password: str, session: SessionDep
+) -> User | None:
     password_utils = PasswordUtils()
     if not user or not password_utils.verify_password(user.hashed_password, password):
         return None

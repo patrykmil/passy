@@ -10,7 +10,7 @@ class CredentialBase(SQLModel):
 
 
 class Credential(CredentialBase, table=True):
-    id: int | None = Field(default=None, primary_key=True)
+    id: int = Field(default=None, primary_key=True)
     team_id: int | None = None
 
 
