@@ -68,7 +68,7 @@ const appStorage = {
 
 export const useUserStore = create<UserState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       user: null,
       isAuthenticated: false,
       symetricKey: null,
@@ -107,22 +107,10 @@ export const useUserStore = create<UserState>()(
       logout: async () => {
         try {
           await authApi.logout();
-
-          set({
-            user: null,
-            isAuthenticated: false,
-            symetricKey: null,
-            privateKey: null,
-          });
         } catch (error) {
           console.error('Logout failed:', error);
-          set({
-            user: null,
-            isAuthenticated: false,
-            symetricKey: null,
-            privateKey: null,
-          });
         }
+        get().clearUser();
       },
     }),
     {

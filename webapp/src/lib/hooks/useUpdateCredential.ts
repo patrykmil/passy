@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
-import { z } from 'zod';
-import { credentialsApi, teamsApi, userApi } from '@/lib/api';
+import { credentialsApi } from '@/lib/api';
 import { useFormValidation } from '@/lib/hooks/useFormValidation';
 import { useUserStore } from '@/lib/stores/userStore';
 import {
@@ -11,20 +10,14 @@ import {
   decryptPassword,
   decryptTeamPassword,
 } from '@/lib/crypto';
+import {
+  buildCredentialData,
+  collectTeamMemberIds,
+  credentialSchema,
+  getMemberPublicKey,
+  initialCredentialValues,
+} from '@/lib/credentialForm';
 import type { CredentialPublic, CredentialUpdate, ApiError } from '@/lib/types';
-
-const credentialSchema = z.object({
-  record_name: z.string().min(1, 'Record name is required'),
-  url: z
-    .string()
-    .optional()
-    .refine((val) => !val || z.url().safeParse(val).success, {
-      message: 'Please enter a valid URL',
-    }),
-  login: z.string().min(1, 'Login is required'),
-  password: z.string().min(1, 'Password is required'),
-  team_id: z.number().optional(),
-});
 
 async function decryptCredentialPassword(
   credential: CredentialPublic,
@@ -49,62 +42,6 @@ async function findUserCredentialInGroup(
   return credentials.find((cred) => cred.user_id === userId) || null;
 }
 
-function buildUpdateData(
-  values: { record_name: string; url?: string; login: string },
-  encryptedPassword: string,
-  extra?: Partial<CredentialUpdate>
-): CredentialUpdate {
-  return {
-    record_name: values.record_name,
-    url: values.url && values.url.trim() !== '' ? values.url : undefined,
-    login: values.login,
-    password: encryptedPassword,
-    ...extra,
-  };
-}
-
-async function collectTeamMemberIds(teamId: number): Promise<Set<number>> {
-  const teamDetails = await teamsApi.getMyTeams();
-  const teamDetail = teamDetails.find((t) => t.id === teamId);
-  if (!teamDetail) {
-    throw new Error('Failed to fetch team details.');
-  }
-
-  const memberIds = new Set<number>();
-  teamDetail.members.forEach((m) => {
-    if (m.id) memberIds.add(m.id);
-  });
-  teamDetail.admins.forEach((a) => {
-    if (a.id) memberIds.add(a.id);
-  });
-  return memberIds;
-}
-
-async function encryptForMemberAndUpdate(
-  memberId: number,
-  values: { record_name: string; url?: string; login: string; password: string },
-  group: string | undefined,
-  credentialId: number | null,
-  isGroupUpdate: boolean
-): Promise<void> {
-  const memberUser = await userApi.getUserById(memberId);
-  if (!memberUser.public_key) {
-    throw new Error(`No public key found for user ${memberUser.username}`);
-  }
-
-  const encryptedPassword = encryptTeamPassword(values.password, memberUser.public_key);
-
-  const credentialData = buildUpdateData(values, encryptedPassword, {
-    user_id: memberId,
-  });
-
-  if (isGroupUpdate && group) {
-    await credentialsApi.updateCredentialGroup(group, credentialData);
-  } else if (credentialId) {
-    await credentialsApi.updateCredentialOne(credentialId, credentialData);
-  }
-}
-
 export function useUpdateCredential() {
   const navigate = useNavigate();
   const { id, group } = useParams<{ id?: string; group?: string }>();
@@ -119,31 +56,10 @@ export function useUpdateCredential() {
 
   const form = useFormValidation({
     schema: credentialSchema,
-    initialValues: {
-      record_name: '',
-      url: '',
-      login: '',
-      password: '',
-      team_id: undefined,
-    },
+    initialValues: initialCredentialValues,
   });
 
   const adminTeams = user?.admin_teams || [];
-
-  const populateForm = async (credential: CredentialPublic) => {
-    const decryptedPassword = await decryptCredentialPassword(
-      credential,
-      privateKey,
-      symetricKey
-    );
-    form.setValue('record_name', credential.record_name || '');
-    form.setValue('url', credential.url || '');
-    form.setValue('login', credential.login || '');
-    form.setValue('password', decryptedPassword);
-    if (credential.team_id) {
-      form.setValue('team_id', credential.team_id);
-    }
-  };
 
   useEffect(() => {
     const loadCredential = async () => {
@@ -151,18 +67,31 @@ export function useUpdateCredential() {
         setIsLoading(true);
         setError(null);
 
+        let credential: CredentialPublic | null;
         if (isGroupUpdate && group) {
-          const credential = await findUserCredentialInGroup(group, user?.id);
+          credential = await findUserCredentialInGroup(group, user?.id);
           if (!credential) {
             setError('No credential found for the current user in this group');
             return;
           }
-          await populateForm(credential);
         } else if (credentialId) {
-          const credential = await credentialsApi.getCredentialById(credentialId);
-          await populateForm(credential);
+          credential = await credentialsApi.getCredentialById(credentialId);
         } else {
           setError('Invalid credential ID or group');
+          return;
+        }
+
+        const decryptedPassword = await decryptCredentialPassword(
+          credential,
+          privateKey,
+          symetricKey
+        );
+        form.setValue('record_name', credential.record_name || '');
+        form.setValue('url', credential.url || '');
+        form.setValue('login', credential.login || '');
+        form.setValue('password', decryptedPassword);
+        if (credential.team_id) {
+          form.setValue('team_id', credential.team_id);
         }
       } catch (err: any) {
         console.error('Failed to load credential:', err);
@@ -173,6 +102,7 @@ export function useUpdateCredential() {
     };
 
     loadCredential();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, group]);
 
   const updateMutation = useMutation<CredentialPublic, ApiError, CredentialUpdate>({
@@ -204,8 +134,7 @@ export function useUpdateCredential() {
       ? await encryptPassword(form.values.password, symetricKey!)
       : encryptTeamPassword(form.values.password, privateKey!);
 
-    const credentialData = buildUpdateData(form.values, encryptedPassword);
-    updateMutation.mutate(credentialData);
+    updateMutation.mutate(buildCredentialData(form.values, encryptedPassword));
   };
 
   const handleGroupUpdate = async (teamId: number) => {
@@ -224,13 +153,20 @@ export function useUpdateCredential() {
     }
 
     for (const memberId of memberIds) {
-      await encryptForMemberAndUpdate(
-        memberId,
-        form.values,
-        group,
-        credentialId,
-        isGroupUpdate
-      );
+      const publicKey = await getMemberPublicKey(memberId);
+      const encryptedPassword = encryptTeamPassword(form.values.password, publicKey);
+
+      if (group) {
+        await credentialsApi.updateCredentialGroup(
+          group,
+          buildCredentialData(form.values, encryptedPassword, { user_id: memberId })
+        );
+      } else if (credentialId) {
+        await credentialsApi.updateCredentialOne(
+          credentialId,
+          buildCredentialData(form.values, encryptedPassword, { user_id: memberId })
+        );
+      }
     }
 
     setIsSuccess(true);

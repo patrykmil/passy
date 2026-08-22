@@ -1,9 +1,13 @@
+from typing import Annotated
+
 from dependencies.auth_deps import CurrentUser
-from dependencies.credentials_deps import CredentialsServiceDep
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from models.credential import CredentialCreate, CredentialPublic, CredentialUpdate
+from services.credentials_service import CredentialsService
 
 router = APIRouter()
+
+CredentialsServiceDep = Annotated[CredentialsService, Depends(CredentialsService)]
 
 
 @router.get("/group/{group}", response_model=list[CredentialPublic])

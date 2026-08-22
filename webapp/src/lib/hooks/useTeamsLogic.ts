@@ -1,10 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { teamsApi } from '@/lib/api';
-import { useScrollToElement } from '@/lib/hooks/useScrollToElement';
 
 export function useTeamsLogic() {
-  const scrollToElement = useScrollToElement();
-
   const {
     data: teams = [],
     isLoading,
@@ -16,7 +13,9 @@ export function useTeamsLogic() {
   });
 
   const scrollToTeam = (teamId: number) => {
-    scrollToElement(`team-${teamId}`);
+    document
+      .getElementById(`team-${teamId}`)
+      ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   return {

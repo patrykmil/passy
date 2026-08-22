@@ -2,14 +2,13 @@ import { Navigate, useNavigate } from 'react-router-dom';
 import { useUserStore } from '@/lib/stores/userStore';
 import { ChangeSecurityInfoForm } from '@/components/auth/ChangeSecurityInfoForm';
 import { ReauthenticationPrompt } from '@/components/auth/ReauthenticationPrompt';
-import { useEncryption } from '@/lib/hooks/useEncryption';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
 import { Header } from '@/components/layout/Header';
 
 function ChangeSecurityInfo() {
-  const { isAuthenticated } = useUserStore();
-  const { needsReauth } = useEncryption();
+  const { isAuthenticated, user, symetricKey } = useUserStore();
+  const needsReauth = isAuthenticated && !!user && !symetricKey;
   const navigate = useNavigate();
 
   const goBack = () => {

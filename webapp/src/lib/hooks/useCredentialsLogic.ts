@@ -1,53 +1,18 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { credentialsApi, teamsApi } from '@/lib/api';
-import { useScrollToElement } from '@/lib/hooks/useScrollToElement';
 import type { CredentialPublic } from '@/lib/types';
-
-function fuzzySearch(query: string, text: string): number {
-  if (!query) return 1;
-  if (!text) return 0;
-
-  const queryLower = query.toLowerCase();
-  const textLower = text.toLowerCase();
-
-  if (textLower.includes(queryLower)) {
-    const index = textLower.indexOf(queryLower);
-    return 1 - (index / textLower.length) * 0.5;
-  }
-
-  let queryIndex = 0;
-
-  for (let i = 0; i < textLower.length && queryIndex < queryLower.length; i++) {
-    if (textLower[i] === queryLower[queryIndex]) {
-      queryIndex++;
-    }
-  }
-
-  const matchRatio = queryIndex / queryLower.length;
-  return queryIndex === queryLower.length ? matchRatio * 0.7 : 0;
-}
-
-function scoreCredential(credential: CredentialPublic, query: string): number {
-  const nameScore = fuzzySearch(query, credential.record_name || '');
-  const urlScore = fuzzySearch(query, credential.url || '');
-  const loginScore = fuzzySearch(query, credential.login || '');
-  return nameScore * 0.5 + urlScore * 0.3 + loginScore * 0.2;
-}
 
 function filterBySearch(
   credentials: CredentialPublic[],
   query: string
 ): CredentialPublic[] {
-  if (!query.trim()) return credentials;
+  const q = query.trim().toLowerCase();
+  if (!q) return credentials;
 
-  return credentials
-    .map((credential) => ({
-      ...credential,
-      searchScore: scoreCredential(credential, query),
-    }))
-    .filter((credential) => credential.searchScore > 0)
-    .sort((a, b) => b.searchScore - a.searchScore);
+  return credentials.filter((c) =>
+    `${c.record_name || ''} ${c.url || ''} ${c.login || ''}`.toLowerCase().includes(q)
+  );
 }
 
 function groupByOwnership(credentials: CredentialPublic[]) {
@@ -70,7 +35,6 @@ function groupByOwnership(credentials: CredentialPublic[]) {
 
 export function useCredentialsLogic(isAuthenticated: boolean) {
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const scrollToElement = useScrollToElement();
   const queryClient = useQueryClient();
 
   const {
@@ -143,7 +107,9 @@ export function useCredentialsLogic(isAuthenticated: boolean) {
   };
 
   const scrollToSection = (sectionId: string) => {
-    scrollToElement(sectionId);
+    document
+      .getElementById(sectionId)
+      ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   return {

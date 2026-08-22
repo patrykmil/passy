@@ -1,11 +1,15 @@
-from dependencies.auth_deps import AuthServiceDep
-from dependencies.users_deps import UsersServiceDep
+from typing import Annotated
+
+from database.database import SessionDep
 from fastapi import APIRouter, Depends, Response
 from fastapi.security import OAuth2PasswordRequestForm
-
-from api.database.database import SessionDep
+from services.auth_service import AuthService
+from services.users_service import UsersService
 
 router = APIRouter()
+
+AuthServiceDep = Annotated[AuthService, Depends(AuthService)]
+UsersServiceDep = Annotated[UsersService, Depends(UsersService)]
 
 
 @router.post("/login")

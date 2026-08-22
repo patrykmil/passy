@@ -38,7 +38,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<'div'>) 
   >({
     mutationFn: authApi.login,
     onSuccess: async (user, variables) => {
-      const symetricKey = deriveKey(variables.password, variables.username);
+      const symetricKey = await deriveKey(variables.password, variables.username);
 
       let privateKey: string | undefined;
       if (user.encrypted_private_key) {

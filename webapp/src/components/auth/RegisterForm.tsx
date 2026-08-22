@@ -71,7 +71,7 @@ export function RegisterForm({ className, ...props }: React.ComponentProps<'div'
 
     const { publicKey, privateKey } = generateKeyPair();
 
-    const symetricKey = deriveKey(form.values.password, form.values.username);
+    const symetricKey = await deriveKey(form.values.password, form.values.username);
 
     const encryptedPrivateKey = await encryptPrivateKey(privateKey, symetricKey);
 

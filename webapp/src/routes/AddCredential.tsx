@@ -6,10 +6,11 @@ import { CredentialForm } from '@/components/credentials/CredentialForm';
 import { SuccessMessage } from '@/components/state/SuccessMessage';
 import { ReauthenticationPrompt } from '@/components/auth/ReauthenticationPrompt';
 import { useAddCredential } from '@/lib/hooks/useAddCredential';
-import { useEncryption } from '@/lib/hooks/useEncryption';
+import { useUserStore } from '@/lib/stores/userStore';
 
 export default function AddCredential() {
-  const { needsReauth } = useEncryption();
+  const { isAuthenticated, user, symetricKey } = useUserStore();
+  const needsReauth = isAuthenticated && !!user && !symetricKey;
   const {
     form,
     adminTeams,

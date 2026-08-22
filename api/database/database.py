@@ -1,9 +1,8 @@
 from typing import Annotated
 
+from config import SQLITE_FILE
 from fastapi import Depends
 from sqlmodel import Session, create_engine
-
-from api.config import SQLITE_FILE
 
 sqlite_url = f"sqlite:///{SQLITE_FILE}"
 

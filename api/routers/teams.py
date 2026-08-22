@@ -1,21 +1,25 @@
+from typing import Annotated
+
 from dependencies.auth_deps import CurrentUser
-from dependencies.teams_deps import TeamsServiceDep
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from models.team import (
     TeamApplication,
     TeamApplicationAction,
     TeamApplicationResponse,
-    TeamCreate,
+    TeamBase,
     TeamDetailed,
     TeamPublic,
 )
+from services.teams_service import TeamsService
 
 router = APIRouter()
+
+TeamsServiceDep = Annotated[TeamsService, Depends(TeamsService)]
 
 
 @router.post("/", response_model=TeamPublic)
 async def add_team(
-    team: TeamCreate, teams_service: TeamsServiceDep, current_user: CurrentUser
+    team: TeamBase, teams_service: TeamsServiceDep, current_user: CurrentUser
 ):
     return teams_service.add_team(team.name, current_user)
 
@@ -57,13 +61,6 @@ async def get_my_applications(
     teams_service: TeamsServiceDep, current_user: CurrentUser
 ):
     return teams_service.get_my_applications(current_user)
-
-
-@router.get("/{id}", response_model=TeamPublic)
-async def get_teams_by_id(
-    id: int, teams_service: TeamsServiceDep, current_user: CurrentUser
-):
-    return teams_service.get_team_by_id(id, current_user)
 
 
 @router.delete("/{team_id}/members/{user_id}", response_model=dict)

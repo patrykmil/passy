@@ -102,7 +102,8 @@ export function TeamCard({ team, onTeamUpdate }: TeamCardProps) {
   });
 
   const kickUserMutation = useMutation({
-    mutationFn: teamsApi.kickUserFromTeam,
+    mutationFn: ({ teamId, userId }: { teamId: number; userId: number }) =>
+      teamsApi.kickUserFromTeam(teamId, userId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['teams'] });
       onTeamUpdate?.();
@@ -126,10 +127,7 @@ export function TeamCard({ team, onTeamUpdate }: TeamCardProps) {
       return;
     }
 
-    kickUserMutation.mutate({
-      user_id: memberId,
-      team_id: team.id,
-    });
+    kickUserMutation.mutate({ teamId: team.id, userId: memberId });
   };
 
   return (

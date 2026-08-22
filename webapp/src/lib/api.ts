@@ -11,300 +11,137 @@ import type {
   PendingApplication,
   LoginData,
   TeamCreate,
-  UserRemove,
 } from '@/lib/types';
 import { ApiError } from '@/lib/types';
 
-// ------ API CLIENT SETUP ------
 export const api: AxiosInstance = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000',
   withCredentials: true,
 });
 
-// ------ ERROR HANDLING UTILITY ------
-const handleApiError = (error: any, defaultMessage: string): never => {
-  if (error.response) {
-    const status = error.response.status;
-    const detail = error.response.data?.detail || defaultMessage;
-    throw new ApiError(detail, status, detail);
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const detail = error.response?.data?.detail || error.message || 'Request failed';
+    throw new ApiError(detail, error.response?.status ?? 500);
   }
-  throw new ApiError(defaultMessage);
-};
+);
+
+const unwrap = <T>(p: Promise<{ data: T }>): Promise<T> => p.then((r) => r.data);
 
 // ------ AUTH API ------
 export const authApi = {
-  login: async (loginData: LoginData): Promise<UserPublic> => {
-    try {
-      const formData = new FormData();
-      formData.append('username', loginData.username);
-      formData.append('password', loginData.password);
+  login: (loginData: LoginData): Promise<UserPublic> => {
+    const formData = new FormData();
+    formData.append('username', loginData.username);
+    formData.append('password', loginData.password);
 
-      const response = await api.post('/auth/login', formData, {
+    return unwrap(
+      api.post('/auth/login', formData, {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      });
-      return response.data;
-    } catch (error) {
-      return handleApiError(error, 'Login failed');
-    }
+      })
+    );
   },
 
-  logout: async (): Promise<void> => {
-    try {
-      await api.post('/auth/logout');
-    } catch (error) {
-      return handleApiError(error, 'Logout failed');
-    }
-  },
+  logout: () => unwrap(api.post('/auth/logout')),
 
-  changePassword: async (
+  changePassword: (
     oldPassword: string,
     newPassword: string,
     encryptedPrivateKey?: string
-  ): Promise<void> => {
-    try {
-      const data: Record<string, string | undefined> = {
+  ): Promise<void> =>
+    unwrap(
+      api.put('/users/me/password', {
         old_password: oldPassword,
         new_password: newPassword,
-      };
+        encrypted_private_key: encryptedPrivateKey,
+      })
+    ),
 
-      if (encryptedPrivateKey) {
-        data.encrypted_private_key = encryptedPrivateKey;
-      }
-
-      await api.put('/users/me/password', data);
-    } catch (error) {
-      return handleApiError(error, 'Change password failed');
-    }
-  },
-
-  changeKeys: async (publicKey: string, encryptedPrivateKey: string): Promise<void> => {
-    try {
-      const data: Record<string, string> = {
+  changeKeys: (publicKey: string, encryptedPrivateKey: string): Promise<void> =>
+    unwrap(
+      api.put('/users/me/keys', {
         public_key: publicKey,
         encrypted_private_key: encryptedPrivateKey,
-      };
-
-      await api.put('/users/me/keys', data);
-    } catch (error) {
-      return handleApiError(error, 'Change keys failed');
-    }
-  },
+      })
+    ),
 };
 
 // ------ USER API ------
 export const userApi = {
-  register: async (userData: UserCreate): Promise<UserPublic> => {
-    try {
-      const response = await api.post('/users', userData);
-      return response.data;
-    } catch (error) {
-      return handleApiError(error, 'Registration failed');
-    }
-  },
+  register: (userData: UserCreate): Promise<UserPublic> =>
+    unwrap(api.post('/users', userData)),
 
-  getUserById: async (id: number): Promise<UserPublic> => {
-    try {
-      const response = await api.get(`/users/${id}`);
-      return response.data;
-    } catch (error) {
-      return handleApiError(error, 'Failed to fetch user');
-    }
-  },
+  getUserById: (id: number): Promise<UserPublic> => unwrap(api.get(`/users/${id}`)),
 
-  getCurrentUser: async (): Promise<UserPublic> => {
-    try {
-      const response = await api.get('/users/me');
-      return response.data;
-    } catch (error) {
-      return handleApiError(error, 'Failed to fetch current user');
-    }
-  },
+  getCurrentUser: (): Promise<UserPublic> => unwrap(api.get('/users/me')),
 };
 
 // ------ TEAMS API ------
 export const teamsApi = {
-  getMyTeams: async (): Promise<TeamDetailed[]> => {
-    try {
-      const response = await api.get('/teams');
-      return response.data;
-    } catch (error) {
-      return handleApiError(error, 'Failed to fetch my teams');
-    }
-  },
+  getMyTeams: (): Promise<TeamDetailed[]> => unwrap(api.get('/teams')),
 
-  applyToTeam: async (
-    teamCode: string
-  ): Promise<{ message?: string; error?: string }> => {
-    try {
-      const response = await api.post('/teams/applications', { team_code: teamCode });
-      return response.data;
-    } catch (error) {
-      return handleApiError(error, 'Failed to apply to team');
-    }
-  },
+  applyToTeam: (teamCode: string): Promise<{ message?: string; error?: string }> =>
+    unwrap(api.post('/teams/applications', { team_code: teamCode })),
 
-  getTeamApplications: async (teamId: number): Promise<TeamApplicationResponse[]> => {
-    try {
-      const response = await api.get(`/teams/${teamId}/applications`);
-      return response.data;
-    } catch (error) {
-      return handleApiError(error, 'Failed to fetch team applications');
-    }
-  },
+  getTeamApplications: (teamId: number): Promise<TeamApplicationResponse[]> =>
+    unwrap(api.get(`/teams/${teamId}/applications`)),
 
-  respondToApplication: async (
+  respondToApplication: (
     teamId: number,
     userId: number,
     action: TeamApplicationAction
-  ): Promise<{ message?: string; error?: string }> => {
-    try {
-      const response = await api.post(
-        `/teams/${teamId}/applications/${userId}/respond`,
-        action
-      );
-      return response.data;
-    } catch (error) {
-      return handleApiError(error, 'Failed to respond to application');
-    }
-  },
+  ): Promise<{ message?: string; error?: string }> =>
+    unwrap(api.post(`/teams/${teamId}/applications/${userId}/respond`, action)),
 
-  getMyApplications: async (): Promise<PendingApplication[]> => {
-    try {
-      const response = await api.get('/teams/applications/my');
-      return response.data;
-    } catch (error) {
-      return handleApiError(error, 'Failed to fetch my applications');
-    }
-  },
+  getMyApplications: (): Promise<PendingApplication[]> =>
+    unwrap(api.get('/teams/applications/my')),
 
-  createTeam: async (team: TeamCreate): Promise<TeamDetailed> => {
-    try {
-      const response = await api.post('/teams', team);
-      return response.data;
-    } catch (error) {
-      return handleApiError(error, 'Failed to create team');
-    }
-  },
+  createTeam: (team: TeamCreate): Promise<TeamDetailed> =>
+    unwrap(api.post('/teams', team)),
 
-  kickUserFromTeam: async (userRemove: UserRemove): Promise<TeamDetailed> => {
-    try {
-      const response = await api.delete(
-        `/teams/${userRemove.team_id}/members/${userRemove.user_id}`
-      );
-      return response.data;
-    } catch (error) {
-      return handleApiError(error, 'Failed to remove user from team');
-    }
-  },
+  kickUserFromTeam: (teamId: number, userId: number): Promise<void> =>
+    unwrap(api.delete(`/teams/${teamId}/members/${userId}`)),
 
-  quitTeam: async (teamId: number): Promise<void> => {
-    try {
-      await api.delete(`/teams/${teamId}/membership`);
-    } catch (error) {
-      return handleApiError(error, 'Failed to quit team');
-    }
-  },
+  quitTeam: (teamId: number): Promise<void> =>
+    unwrap(api.delete(`/teams/${teamId}/membership`)),
 };
 
 // ------ CREDENTIALS API ------
 export const credentialsApi = {
-  getMyCredentials: async (): Promise<CredentialPublic[]> => {
-    try {
-      const response = await api.get('/credentials');
-      return response.data;
-    } catch (error) {
-      return handleApiError(error, 'Failed to fetch credentials');
-    }
-  },
+  getMyCredentials: (): Promise<CredentialPublic[]> => unwrap(api.get('/credentials')),
 
-  getCredentialById: async (id: number): Promise<CredentialPublic> => {
-    try {
-      const response = await api.get(`/credentials/${id}`);
-      return response.data;
-    } catch (error) {
-      return handleApiError(error, 'Failed to fetch credential');
-    }
-  },
+  getCredentialById: (id: number): Promise<CredentialPublic> =>
+    unwrap(api.get(`/credentials/${id}`)),
 
-  getCredentialByGroup: async (group: string): Promise<Array<CredentialPublic>> => {
-    try {
-      const response = await api.get(`/credentials/group/${group}`);
-      return response.data;
-    } catch (error) {
-      return handleApiError(error, 'Failed to fetch credential');
-    }
-  },
+  getCredentialByGroup: (group: string): Promise<CredentialPublic[]> =>
+    unwrap(api.get(`/credentials/group/${group}`)),
 
-  createCredential: async (
-    credentialData: CredentialCreate
-  ): Promise<CredentialPublic> => {
-    try {
-      const response = await api.post('/credentials', credentialData);
-      return response.data;
-    } catch (error) {
-      return handleApiError(error, 'Failed to create credential');
-    }
-  },
+  createCredential: (credentialData: CredentialCreate): Promise<CredentialPublic> =>
+    unwrap(api.post('/credentials', credentialData)),
 
-  createCredentialBatch: async (
+  createCredentialBatch: (
     credentials: CredentialCreate[]
-  ): Promise<CredentialPublic[]> => {
-    try {
-      const response = await api.post('/credentials/batch', credentials);
-      return response.data;
-    } catch (error) {
-      return handleApiError(error, 'Failed to create credentials');
-    }
-  },
+  ): Promise<CredentialPublic[]> => unwrap(api.post('/credentials/batch', credentials)),
 
-  updateCredentialOne: async (
+  updateCredentialOne: (
     id: number,
     credentialData: CredentialUpdate
-  ): Promise<CredentialPublic> => {
-    try {
-      const response = await api.put(`/credentials/${id}`, credentialData);
-      return response.data;
-    } catch (error) {
-      return handleApiError(error, 'Failed to update credential');
-    }
-  },
+  ): Promise<CredentialPublic> => unwrap(api.put(`/credentials/${id}`, credentialData)),
 
-  updateCredentialGroup: async (
+  updateCredentialGroup: (
     group: string,
     credentialData: CredentialUpdate
-  ): Promise<CredentialPublic> => {
-    try {
-      const response = await api.put(`/credentials/group/${group}`, credentialData);
-      return response.data;
-    } catch (error) {
-      return handleApiError(error, 'Failed to update credential');
-    }
-  },
+  ): Promise<CredentialPublic> =>
+    unwrap(api.put(`/credentials/group/${group}`, credentialData)),
 
-  updateCredentialBatch: async (
+  updateCredentialBatch: (
     credentials: CredentialUpdate[]
-  ): Promise<CredentialPublic[]> => {
-    try {
-      const response = await api.put(`/credentials/batch`, credentials);
-      return response.data;
-    } catch (error) {
-      return handleApiError(error, 'Failed to update credential');
-    }
-  },
+  ): Promise<CredentialPublic[]> => unwrap(api.put('/credentials/batch', credentials)),
 
-  deleteCredentialOne: async (id: number): Promise<void> => {
-    try {
-      await api.delete(`/credentials/${id}`);
-    } catch (error) {
-      return handleApiError(error, 'Failed to delete credential');
-    }
-  },
+  deleteCredentialOne: (id: number): Promise<void> =>
+    unwrap(api.delete(`/credentials/${id}`)),
 
-  deleteCredentialGroup: async (group: string): Promise<void> => {
-    try {
-      await api.delete(`/credentials/group/${group}`);
-    } catch (error) {
-      return handleApiError(error, 'Failed to delete credential');
-    }
-  },
+  deleteCredentialGroup: (group: string): Promise<void> =>
+    unwrap(api.delete(`/credentials/group/${group}`)),
 };

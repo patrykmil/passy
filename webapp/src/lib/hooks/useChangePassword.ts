@@ -79,8 +79,8 @@ export function useChangePassword(): UseChangePasswordReturn {
     mutationFn: ({ oldPassword, newPassword, encryptedPrivateKey }) =>
       authApi.changePassword(oldPassword, newPassword, encryptedPrivateKey),
     onSuccess: async (_, { oldPassword, newPassword }) => {
-      const oldSymetricKey = deriveKey(oldPassword, user!.username);
-      const newSymetricKey = deriveKey(newPassword, user!.username);
+      const oldSymetricKey = await deriveKey(oldPassword, user!.username);
+      const newSymetricKey = await deriveKey(newPassword, user!.username);
 
       useUserStore.setState({ symetricKey: newSymetricKey });
 

@@ -28,7 +28,7 @@ export function ReauthenticationPrompt() {
   >({
     mutationFn: authApi.login,
     onSuccess: async (userData, variables) => {
-      const symetricKey = deriveKey(variables.password, variables.username);
+      const symetricKey = await deriveKey(variables.password, variables.username);
 
       let privateKey: string | undefined;
       if (userData.encrypted_private_key) {

@@ -28,7 +28,7 @@ class User(UserBase, table=True):
 
 
 class UserPrivate(UserBase):
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: Optional[int] = None
     public_key: Optional[str] = Field(default=None)
     encrypted_private_key: Optional[str] = Field(default=None)
     member_teams: list[TeamPublic] = Field(default_factory=list)
@@ -36,7 +36,7 @@ class UserPrivate(UserBase):
 
 
 class UserPublic(UserBase):
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: Optional[int] = None
     public_key: Optional[str] = Field(default=None)
     encrypted_private_key: Optional[str] = Field(default=None)
     member_teams: list[TeamPublic] = Field(default_factory=list)

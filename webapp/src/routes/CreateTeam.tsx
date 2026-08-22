@@ -14,7 +14,6 @@ import { teamsApi } from '@/lib/api';
 import type { TeamDetailed, TeamPublic } from '@/lib/types';
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useEncryption } from '@/lib/hooks/useEncryption';
 import { useUserStore } from '@/lib/stores/userStore';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
@@ -23,9 +22,9 @@ export default function CreateTeam() {
   const navigate = useNavigate();
   const [name, setName] = useState(teamName || '');
   const [error, setError] = useState<string | null>(null);
-  const { needsReauth } = useEncryption();
   const [isSuccess, setIsSuccess] = useState(false);
-  const { user, updateUser } = useUserStore();
+  const { user, updateUser, isAuthenticated, symetricKey } = useUserStore();
+  const needsReauth = isAuthenticated && !!user && !symetricKey;
   const queryClient = useQueryClient();
 
   const createTeamMutation = useMutation({
@@ -69,7 +68,7 @@ export default function CreateTeam() {
 
     setError(null);
 
-    createTeamMutation.mutate({ name: name.trim(), admin_id: user?.id ? user.id : 0 });
+    createTeamMutation.mutate({ name: name.trim() });
   };
 
   return (

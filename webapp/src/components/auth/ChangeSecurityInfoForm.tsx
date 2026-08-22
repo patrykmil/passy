@@ -66,7 +66,7 @@ export function ChangeSecurityInfoForm({
       return;
     }
 
-    const symetricKey = deriveKey(form.values.newPassword, user.username);
+    const symetricKey = await deriveKey(form.values.newPassword, user.username);
     const encryptedPrivateKey = await encryptPrivateKey(privateKey, symetricKey);
 
     changePasswordMutation.mutate({

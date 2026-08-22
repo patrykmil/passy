@@ -1,3 +1,6 @@
+from itertools import chain
+
+from fastapi import HTTPException
 from models.credential import (
     Credential,
     CredentialCreate,
@@ -8,7 +11,6 @@ from models.credential import (
 from models.user import User
 from services.base_service import BaseService
 from sqlmodel import select
-from utils.exceptions import exception_forbidden, exception_not_found
 
 
 class CredentialsService(BaseService):
@@ -107,7 +109,7 @@ class CredentialsService(BaseService):
     # --- permissions ---
 
     def is_permitted_to_add(self, user: User, team_id: int | None = None) -> bool:
-        if team_id is None or team_id == 0:
+        if team_id is None:
             return True
         from services.teams_service import TeamsService
 
@@ -136,7 +138,7 @@ class CredentialsService(BaseService):
         self, credential_data: CredentialCreate, user: User
     ) -> CredentialPublic:
         if not self.is_permitted_to_add(user=user, team_id=credential_data.team_id):
-            raise exception_forbidden()
+            raise HTTPException(403, "Unauthorized access")
 
         db_credential, db_secret = self._add_one(credential_data, user)
         self.session.commit()
@@ -147,17 +149,13 @@ class CredentialsService(BaseService):
     ) -> list[CredentialPublic]:
         for cred in credentials:
             if not self.is_permitted_to_add(user=user, team_id=cred.team_id):
-                raise exception_forbidden()
+                raise HTTPException(403, "Unauthorized access")
 
         cred_secret_pairs = [
             self._add_one(cred_data, user) for cred_data in credentials
         ]
 
-        self.session.commit()
-
-        for cred, secret in cred_secret_pairs:
-            self.session.refresh(cred)
-            self.session.refresh(secret)
+        self._persist_and_refresh(*chain.from_iterable(cred_secret_pairs))
 
         return [self._to_public(cred, secret) for cred, secret in cred_secret_pairs]
 
@@ -175,11 +173,11 @@ class CredentialsService(BaseService):
     def get_credential_by_id(self, credential_id: int, user: User) -> CredentialPublic:
         db_credential = self.session.get_one(Credential, credential_id)
         if not db_credential:
-            raise exception_not_found("Credential not found")
+            raise HTTPException(404, "Credential not found")
 
         db_secret = self._get_user_secret(credential_id, user.id)
         if not db_secret:
-            raise exception_forbidden()
+            raise HTTPException(403, "Unauthorized access")
 
         return self._to_public(db_credential, db_secret)
 
@@ -190,11 +188,11 @@ class CredentialsService(BaseService):
             select(Credential).where(Credential.group == credential_group)
         ).one()
         if not db_credential:
-            raise exception_not_found("Credential not found")
+            raise HTTPException(404, "Credential not found")
 
         admin_team_ids = [team.id for team in user.admin_teams]
         if db_credential.team_id not in admin_team_ids:
-            raise exception_forbidden()
+            raise HTTPException(403, "Unauthorized access")
 
         db_secrets = self.session.exec(
             select(CredentialSecret).where(
@@ -211,7 +209,7 @@ class CredentialsService(BaseService):
         cred = self.is_permitted_to_delete_one(user=user, credential_id=credential_id)
 
         if not cred:
-            raise exception_forbidden()
+            raise HTTPException(403, "Unauthorized access")
 
         cred_sec = self.session.exec(
             select(CredentialSecret).where(CredentialSecret.credential_id == cred.id)
@@ -232,7 +230,7 @@ class CredentialsService(BaseService):
         if not self.is_permitted_to_delete_admin(
             user=user, credential_group=credential_group
         ):
-            raise exception_forbidden()
+            raise HTTPException(403, "Unauthorized access")
 
         team_credential = self.session.exec(
             select(Credential).where(Credential.group == credential_group)
@@ -256,7 +254,7 @@ class CredentialsService(BaseService):
         db_secret = self._get_user_secret(credential_id, user.id)
 
         if not db_secret:
-            raise exception_forbidden()
+            raise HTTPException(403, "Unauthorized access")
 
         update_data = credential_data.model_dump(exclude_unset=True)
         self._apply_update_fields(db_credential, db_secret, update_data)
@@ -270,7 +268,7 @@ class CredentialsService(BaseService):
         if not self.is_permitted_to_delete_admin(
             user=user, credential_group=credential_group
         ):
-            raise exception_forbidden()
+            raise HTTPException(403, "Unauthorized access")
 
         update_data = credential_data.model_dump(exclude_unset=True)
 

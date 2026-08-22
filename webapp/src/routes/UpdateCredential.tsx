@@ -8,10 +8,11 @@ import { LoadingState } from '@/components/state/LoadingState';
 import { ErrorState } from '@/components/state/ErrorState';
 import { ReauthenticationPrompt } from '@/components/auth/ReauthenticationPrompt';
 import { useUpdateCredential } from '@/lib/hooks/useUpdateCredential';
-import { useEncryption } from '@/lib/hooks/useEncryption';
+import { useUserStore } from '@/lib/stores/userStore';
 
 export default function UpdateCredential() {
-  const { needsReauth } = useEncryption();
+  const { isAuthenticated, user, symetricKey } = useUserStore();
+  const needsReauth = isAuthenticated && !!user && !symetricKey;
   const {
     form,
     adminTeams,

@@ -1,67 +1,21 @@
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { z } from 'zod';
-import { credentialsApi, teamsApi, userApi } from '@/lib/api';
+import { credentialsApi } from '@/lib/api';
 import { useFormValidation } from '@/lib/hooks/useFormValidation';
 import { useUserStore } from '@/lib/stores/userStore';
 import { encryptPassword, encryptTeamPassword } from '@/lib/crypto';
-import type { CredentialCreate, CredentialPublic, ApiError } from '@/lib/types';
-
-const credentialSchema = z.object({
-  record_name: z.string().min(1, 'Record name is required'),
-  url: z
-    .string()
-    .optional()
-    .refine((val) => !val || z.url().safeParse(val).success, {
-      message: 'Please enter a valid URL',
-    }),
-  login: z.string().min(1, 'Login is required'),
-  password: z.string().min(1, 'Password is required'),
-  team_id: z.number().optional(),
-});
+import {
+  buildCredentialData,
+  collectTeamMemberIds,
+  credentialSchema,
+  getMemberPublicKey,
+  initialCredentialValues,
+} from '@/lib/credentialForm';
+import type { CredentialPublic, ApiError } from '@/lib/types';
 
 const generateGroupToken = (size: number): string =>
   [...Array(size)].map(() => Math.floor(Math.random() * 16).toString(16)).join('');
-
-function buildCredentialData(
-  values: { record_name: string; url?: string; login: string },
-  encryptedPassword: string,
-  extra?: Partial<CredentialCreate>
-): CredentialCreate {
-  return {
-    record_name: values.record_name,
-    url: values.url && values.url.trim() !== '' ? values.url : undefined,
-    login: values.login,
-    password: encryptedPassword,
-    ...extra,
-  };
-}
-
-async function collectTeamMemberIds(teamId: number): Promise<Set<number>> {
-  const teamDetails = await teamsApi.getMyTeams();
-  const teamDetail = teamDetails.find((t) => t.id === teamId);
-  if (!teamDetail) {
-    throw new Error('Failed to fetch team details.');
-  }
-
-  const memberIds = new Set<number>();
-  teamDetail.members.forEach((m) => {
-    if (m.id) memberIds.add(m.id);
-  });
-  teamDetail.admins.forEach((a) => {
-    if (a.id) memberIds.add(a.id);
-  });
-  return memberIds;
-}
-
-async function createPersonalCredential(
-  values: { record_name: string; url?: string; login: string; password: string },
-  symetricKey: string
-): Promise<CredentialCreate> {
-  const encryptedPassword = await encryptPassword(values.password, symetricKey);
-  return buildCredentialData(values, encryptedPassword, { team_id: undefined });
-}
 
 async function createTeamCredentials(
   values: { record_name: string; url?: string; login: string; password: string },
@@ -70,19 +24,11 @@ async function createTeamCredentials(
 ): Promise<void> {
   const groupToken = generateGroupToken(24);
 
-  const credentialDataList: CredentialCreate[] = [];
+  const credentialDataList = [];
   for (const memberId of memberIds) {
-    const memberUser = await userApi.getUserById(memberId);
-    if (!memberUser.public_key) {
-      throw new Error(`No public key found for user ${memberUser.username}`);
-    }
-
-    const encryptedPassword = encryptTeamPassword(
-      values.password,
-      memberUser.public_key
-    );
+    const publicKey = await getMemberPublicKey(memberId);
     credentialDataList.push(
-      buildCredentialData(values, encryptedPassword, {
+      buildCredentialData(values, encryptTeamPassword(values.password, publicKey), {
         team_id: teamId,
         user_id: memberId,
         group: groupToken,
@@ -101,18 +47,16 @@ export function useAddCredential() {
 
   const form = useFormValidation({
     schema: credentialSchema,
-    initialValues: {
-      record_name: '',
-      url: '',
-      login: '',
-      password: '',
-      team_id: undefined,
-    },
+    initialValues: initialCredentialValues,
   });
 
   const adminTeams = user?.admin_teams || [];
 
-  const createMutation = useMutation<CredentialPublic, ApiError, CredentialCreate>({
+  const createMutation = useMutation<
+    CredentialPublic,
+    ApiError,
+    Parameters<typeof credentialsApi.createCredential>[0]
+  >({
     mutationFn: credentialsApi.createCredential,
     onSuccess: () => {
       setIsSuccess(true);
@@ -145,8 +89,11 @@ export function useAddCredential() {
       const teamId = form.values.team_id;
 
       if (!teamId) {
-        const credentialData = await createPersonalCredential(form.values, symetricKey);
-        createMutation.mutate(credentialData);
+        const encryptedPassword = await encryptPassword(
+          form.values.password,
+          symetricKey
+        );
+        createMutation.mutate(buildCredentialData(form.values, encryptedPassword));
         return;
       }
 

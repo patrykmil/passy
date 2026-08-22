@@ -53,24 +53,16 @@ class Team(TeamBase, table=True):
 
 
 class TeamPublic(TeamBase):
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: Optional[int] = None
     code: str
 
 
 class TeamDetailed(TeamBase):
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: Optional[int] = None
     code: str
     members: list[dict]
     admins: list[dict]
     awaiting: list[dict] = []
-
-
-class TeamCreate(TeamBase):
-    admin_id: int
-
-
-def map_teams_to_public(teams: list["Team"]) -> list["TeamPublic"]:
-    return [TeamPublic(id=team.id, name=team.name, code=team.code) for team in teams]
 
 
 class TeamApplication(SQLModel):
@@ -88,8 +80,3 @@ class TeamApplicationResponse(SQLModel):
 class TeamApplicationAction(SQLModel):
     action: str = "decline"
     role: str = "member"
-
-
-class UserRemove(SQLModel):
-    user_id: int
-    team_id: int

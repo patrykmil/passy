@@ -22,7 +22,7 @@ class CredentialSecret(SQLModel, table=True):
 
 
 class CredentialPublic(CredentialBase):
-    id: int | None = Field(default=None, primary_key=True)
+    id: int | None = None
     password: str
     team_id: int | None = None
     user_id: int | None = None

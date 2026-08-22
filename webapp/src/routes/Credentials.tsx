@@ -9,7 +9,6 @@ import { EmptyState } from '@/components/state/EmptyState';
 import { ReauthenticationPrompt } from '@/components/auth/ReauthenticationPrompt';
 import { useUserStore } from '@/lib/stores/userStore';
 import { useCredentialsLogic } from '@/lib/hooks/useCredentialsLogic';
-import { useEncryption } from '@/lib/hooks/useEncryption';
 import type { CredentialPublic } from '@/lib/types';
 
 interface CredentialSectionProps {
@@ -58,8 +57,8 @@ function CredentialSection({
 }
 
 const Credentials = () => {
-  const { isAuthenticated } = useUserStore();
-  const { needsReauth } = useEncryption();
+  const { isAuthenticated, user, symetricKey } = useUserStore();
+  const needsReauth = isAuthenticated && !!user && !symetricKey;
 
   const {
     searchQuery,

@@ -1,17 +1,28 @@
 import * as nacl from 'tweetnacl';
 import { decodeBase64, encodeBase64 } from 'tweetnacl-util';
-import CryptoJS from 'crypto-js';
 
 export interface KeyPair {
   publicKey: string;
   privateKey: string;
 }
 
-export function deriveKey(password: string, salt: string): string {
-  return CryptoJS.PBKDF2(password, salt, {
-    keySize: 256 / 32,
-    iterations: 100000,
-  }).toString();
+// ponytail: PBKDF2-SHA256/hex mirrors old crypto-js output (v4 default hasher is
+// SHA-256) so vaults encrypted before the crypto-js removal still decrypt.
+export async function deriveKey(password: string, salt: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(password),
+    'PBKDF2',
+    false,
+    ['deriveBits']
+  );
+  const bits = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', hash: 'SHA-256', salt: encoder.encode(salt), iterations: 100000 },
+    keyMaterial,
+    256
+  );
+  return [...new Uint8Array(bits)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
 export function generateKeyPair(): KeyPair {

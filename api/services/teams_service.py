@@ -1,6 +1,6 @@
 import secrets
-from typing import Any
 
+from fastapi import HTTPException
 from models.team import (
     Team,
     TeamAdminLink,
@@ -15,17 +15,16 @@ from models.user import User
 from services.base_service import BaseService
 from services.credentials_service import CredentialsService
 from sqlmodel import select
-from utils.exceptions import exception_forbidden, exception_invalid, exception_not_found
 
 
 class TeamsService(BaseService):
-    def __init__(self, session):
-        super().__init__(session)
-        self.credentials_service = CredentialsService(session)
+    @property
+    def credentials_service(self) -> CredentialsService:
+        return CredentialsService(self.session)
 
     @staticmethod
     def _is_team_admin(user: User, team_id: int | None) -> bool:
-        if team_id is None or team_id == 0:
+        if team_id is None:
             return False
         return any(team.id == team_id for team in user.admin_teams)
 
@@ -43,7 +42,7 @@ class TeamsService(BaseService):
 
     def _require_admin(self, user: User, team: Team) -> None:
         if not self._is_user_admin_of_team(user, team):
-            raise exception_forbidden("You are not an admin of this team")
+            raise HTTPException(403, "You are not an admin of this team")
 
     def _build_team_detailed(self, team: Team, is_admin: bool) -> TeamDetailed:
         return TeamDetailed(
@@ -87,33 +86,19 @@ class TeamsService(BaseService):
         ).first()
 
     def _add_role_link(self, team_id: int, user_id: int, role: str) -> None:
-        if role == "admin":
-            self.session.add(TeamAdminLink(team_id=team_id, user_id=user_id))
-        else:
-            self.session.add(TeamMemberLink(team_id=team_id, user_id=user_id))
+        link = TeamAdminLink if role == "admin" else TeamMemberLink
+        self.session.add(link(team_id=team_id, user_id=user_id))
 
-    def _find_user_team_link(
-        self, user_id: int | None, team_id: int
-    ) -> TeamMemberLink | TeamAdminLink | None:
-        member_link = self.session.exec(
-            select(TeamMemberLink).where(
-                TeamMemberLink.user_id == user_id,
-                TeamMemberLink.team_id == team_id,
-            )
-        ).first()
-        if member_link:
-            return member_link
-
-        return self.session.exec(
-            select(TeamAdminLink).where(
-                TeamAdminLink.user_id == user_id,
-                TeamAdminLink.team_id == team_id,
-            )
-        ).first()
-
-    def get_all_teams(self) -> list[TeamPublic]:
-        teams = self.session.exec(select(Team)).all()
-        return [TeamPublic.model_validate(team.model_dump()) for team in teams]
+    def get_my_applications(self, user: User) -> list[dict]:
+        return [
+            {
+                "team_id": team.id,
+                "team_name": team.name,
+                "team_code": team.code,
+                "application_date": "pending",
+            }
+            for team in user.awaiting_teams
+        ]
 
     def get_my_teams(self, user: User) -> list[TeamDetailed]:
         unique_teams = self._get_unique_user_teams(user)
@@ -126,20 +111,19 @@ class TeamsService(BaseService):
         team = self.session.exec(select(Team).where(Team.code == team_code)).first()
 
         if not team:
-            raise exception_invalid("Invalid team code")
+            raise HTTPException(400, "Invalid team code")
 
         if self._is_user_member_of_team(user, team) or self._is_user_admin_of_team(
             user, team
         ):
-            raise exception_invalid("You are already a member of this team")
+            raise HTTPException(400, "You are already a member of this team")
 
         if self._is_user_awaiting_team(user, team):
-            raise exception_invalid(
-                detail="You already have a pending application for this team"
+            raise HTTPException(
+                400, "You already have a pending application for this team"
             )
 
-        team_await = TeamAwaiting(team_id=team.id, user_id=user.id)
-        self.session.add(team_await)
+        self.session.add(TeamAwaiting(team_id=team.id, user_id=user.id))
         self.session.commit()
 
         return {"message": "Application submitted successfully"}
@@ -168,7 +152,7 @@ class TeamsService(BaseService):
 
         application = self._find_application(team_id, user_id)
         if not application:
-            raise exception_not_found(detail="Application not found")
+            raise HTTPException(404, "Application not found")
 
         self.session.delete(application)
 
@@ -180,33 +164,6 @@ class TeamsService(BaseService):
             self.session.commit()
             return {"message": "Application declined"}
 
-    def get_my_applications(self, user: User) -> list[dict[str, Any]]:
-        return [
-            {
-                "team_id": team.id,
-                "team_name": team.name,
-                "team_code": team.code,
-                "application_date": "pending",
-            }
-            for team in user.awaiting_teams
-        ]
-
-    def get_team_by_id(
-        self,
-        team_id: int,
-        current_user: User,
-    ) -> TeamPublic:
-        if not team_id or team_id <= 0 or not self.session.get(Team, team_id):
-            raise exception_invalid(detail="Invalid team ID")
-
-        current_user_admin_team_ids = {team.id for team in current_user.admin_teams}
-
-        if team_id not in current_user_admin_team_ids:
-            raise exception_forbidden(detail="You are not an admin of this team")
-
-        team = self.session.get_one(Team, team_id)
-        return TeamPublic.model_validate(team.model_dump())
-
     def add_team(self, team_name: str, user: User) -> TeamPublic:
         team_code = secrets.token_hex(12).upper()
         db_team = Team(name=team_name, code=team_code)
@@ -215,8 +172,7 @@ class TeamsService(BaseService):
         self.session.commit()
         self.session.refresh(db_team)
 
-        team_admin_link = TeamAdminLink(team_id=db_team.id, user_id=user.id)
-        self.session.add(team_admin_link)
+        self.session.add(TeamAdminLink(team_id=db_team.id, user_id=user.id))
         self.session.commit()
 
         return TeamPublic(id=db_team.id, name=db_team.name, code=db_team.code)
@@ -238,7 +194,7 @@ class TeamsService(BaseService):
         ).first()
 
         if not team_member_link:
-            raise exception_not_found(detail="Member not found in a team")
+            raise HTTPException(404, "Member not found in a team")
 
         self.session.delete(team_member_link)
         self.session.commit()
@@ -255,7 +211,7 @@ class TeamsService(BaseService):
         link = self._find_user_team_link(current_user.id, team_id)
 
         if not link:
-            raise exception_not_found(detail="Member not found in a team")
+            raise HTTPException(404, "Member not found in a team")
 
         self.session.delete(link)
         self.session.commit()
@@ -266,3 +222,22 @@ class TeamsService(BaseService):
             )
 
         return {"message": "Member removed from team successfully"}
+
+    def _find_user_team_link(
+        self, user_id: int | None, team_id: int
+    ) -> TeamMemberLink | TeamAdminLink | None:
+        member_link = self.session.exec(
+            select(TeamMemberLink).where(
+                TeamMemberLink.user_id == user_id,
+                TeamMemberLink.team_id == team_id,
+            )
+        ).first()
+        if member_link:
+            return member_link
+
+        return self.session.exec(
+            select(TeamAdminLink).where(
+                TeamAdminLink.user_id == user_id,
+                TeamAdminLink.team_id == team_id,
+            )
+        ).first()

@@ -56,9 +56,7 @@ export interface TeamDetailed extends TeamBase {
   awaiting?: Array<{ id?: number; username: string }>;
 }
 
-export interface TeamCreate extends TeamBase {
-  admin_id: number;
-}
+export interface TeamCreate extends TeamBase {}
 
 export interface TeamApplication {
   team_code: string;
@@ -82,11 +80,6 @@ export interface PendingApplication {
   team_name: string;
   team_code: string;
   application_date: string;
-}
-
-export interface UserRemove {
-  user_id: number;
-  team_id: number;
 }
 
 // ------ CREDENTIAL TYPES ------

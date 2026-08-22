@@ -1,9 +1,13 @@
+from typing import Annotated
+
 from dependencies.auth_deps import CurrentUser
-from dependencies.users_deps import UsersServiceDep
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from models.user import ChangeKeysRequest, ChangePasswordRequest, UserCreate, UserPublic
+from services.users_service import UsersService
 
 router = APIRouter()
+
+UsersServiceDep = Annotated[UsersService, Depends(UsersService)]
 
 
 @router.get("/me", response_model=UserPublic)

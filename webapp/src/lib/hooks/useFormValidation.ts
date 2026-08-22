@@ -9,16 +9,13 @@ export interface UseFormValidationOptions<T> {
 export interface FormValidationReturn<T> {
   values: T;
   errors: Partial<Record<keyof T, string>>;
-  isValid: boolean;
   setValue: (field: keyof T, value: any) => void;
   setError: (field: keyof T, message: string) => void;
   clearError: (field: keyof T) => void;
-  clearAllErrors: () => void;
   validate: () => boolean;
   handleInputChange: (
     field: keyof T
   ) => (e: React.ChangeEvent<HTMLInputElement>) => void;
-  reset: () => void;
 }
 
 export function useFormValidation<T extends Record<string, any>>({
@@ -40,10 +37,6 @@ export function useFormValidation<T extends Record<string, any>>({
     setErrors((prev) => ({ ...prev, [field]: undefined }));
   }, []);
 
-  const clearAllErrors = useCallback(() => {
-    setErrors({});
-  }, []);
-
   const validate = useCallback((): boolean => {
     const result = schema.safeParse(values);
 
@@ -57,9 +50,9 @@ export function useFormValidation<T extends Record<string, any>>({
       return false;
     }
 
-    clearAllErrors();
+    setErrors({});
     return true;
-  }, [values, schema, clearAllErrors]);
+  }, [values, schema]);
 
   const handleInputChange = useCallback(
     (field: keyof T) => (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -73,24 +66,13 @@ export function useFormValidation<T extends Record<string, any>>({
     [errors, setValue, clearError]
   );
 
-  const reset = useCallback(() => {
-    setValues(initialValues);
-    setErrors({});
-  }, [initialValues]);
-
-  const isValid =
-    Object.keys(errors).length === 0 && Object.values(errors).every((error) => !error);
-
   return {
     values,
     errors,
-    isValid,
     setValue,
     setError,
     clearError,
-    clearAllErrors,
     validate,
     handleInputChange,
-    reset,
   };
 }
